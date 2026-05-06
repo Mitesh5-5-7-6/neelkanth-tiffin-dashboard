@@ -4,7 +4,9 @@
       "Bash(Get-ChildItem -Path \"d:\\\\neelkanth-tiffin-dashboard\" -Force)",
       "Bash(Select-Object Name, FullName)",
       "Bash(rmdir models *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const r = require\\('radix-ui'\\); console.log\\(Object.keys\\(r\\).slice\\(0,30\\)\\)\")",
+      "Bash(npm install *)"
     ]
   }
 }

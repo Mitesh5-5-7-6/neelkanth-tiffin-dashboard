@@ -60,11 +60,24 @@
   --background: #F8FAFC;
   --foreground: #0F172A;
 
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+
   --muted: #64748B;
   --muted-foreground: #64748B;
 
   --primary: #4F46E5;
+  --primary-foreground: #FFFFFF;
   --primary-light: #E0E7FF;
+
+  --secondary: #F1F5F9;
+  --secondary-foreground: #0F172A;
+
+  --accent: #F1F5F9;
+  --accent-foreground: #0F172A;
 
   --success: #16A34A;
   --success-light: #DCFCE7;
@@ -75,10 +88,31 @@
   --danger: #DC2626;
   --danger-light: #FEE2E2;
 
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+
   --purple: #7C3AED;
   --purple-light: #F3E8FF;
 
   --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #4F46E5;
+  --radius: 0.75rem;
+
+  /* Sidebar */
+  --sidebar: #0F172A;
+  --sidebar-foreground: #F1F5F9;
+  --sidebar-primary: #4F46E5;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #F1F5F9;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #4F46E5;
+
+  /* Legacy aliases used in existing pages */
+  --bg: #F8FAFC;
+  --text: #0F172A;
+  --orange-bg: #EA580C;
 }
 
 .dark {
