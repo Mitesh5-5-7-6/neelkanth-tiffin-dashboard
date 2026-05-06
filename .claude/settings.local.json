@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\neelkanth-tiffin-dashboard\" -Force)",
+      "Bash(Select-Object Name, FullName)",
+      "Bash(rmdir models *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}
