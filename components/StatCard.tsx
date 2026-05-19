@@ -19,26 +19,31 @@ const variantStyles = {
         bg: "bg-primary-light",
         iconBg: "bg-primary",
         text: "text-primary",
+        border: "border-primary-light",
     },
     success: {
         bg: "bg-success-light",
         iconBg: "bg-success",
         text: "text-success",
+        border: "border-success-light",
     },
     warning: {
         bg: "bg-warning-light",
         iconBg: "bg-warning",
         text: "text-warning",
+        border: "border-warning-light",
     },
     purple: {
         bg: "bg-purple-light",
         iconBg: "bg-purple",
         text: "text-purple",
+        border: "border-purple-light",
     },
     danger: {
         bg: "bg-danger-light",
         iconBg: "bg-danger",
         text: "text-danger",
+        border: "border-danger-border",
     },
 };
 
@@ -56,7 +61,7 @@ const StatCard = ({
     return (
         <div className={cn(
             "border border-border rounded-xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition",
-            styles.bg
+            styles.bg, styles.border
         )}>
 
             {/* Top */}

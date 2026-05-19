@@ -17,7 +17,6 @@ export async function GET(_request: NextRequest) {
             Customer.countDocuments({ is_active: false }),
         ]);
 
-        // outstanding would come from a payments aggregation in a full implementation
         return success(
             { total, active, inactive, outstanding: 0 },
             'Customer stats fetched'

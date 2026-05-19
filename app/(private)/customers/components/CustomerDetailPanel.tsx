@@ -1,7 +1,6 @@
 "use client"
 
 import { X, Phone, MapPin, Calendar, IndianRupee, History } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import type { Customer } from "@/types/customer.type"
@@ -69,12 +68,6 @@ export default function CustomerDetailPanel({ customer, onClose, onEdit }: Custo
                         </div>
                         <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-foreground">{customer.full_name}</h4>
-                            <Badge
-                                variant={customer.is_active ? "success" : "destructive"}
-                                className="mt-1 text-xs"
-                            >
-                                {customer.is_active ? "Active" : "Inactive"}
-                            </Badge>
                         </div>
                     </div>
 
@@ -97,17 +90,19 @@ export default function CustomerDetailPanel({ customer, onClose, onEdit }: Custo
                 {/* Tiffin Details */}
                 <div className="px-5 py-4">
                     <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Tiffin Details</p>
-                    <DetailRow label="Morning Price" value={`₹${customer.price_morning}`} />
-                    <DetailRow label="Evening Price" value={`₹${customer.price_evening}`} />
                     <DetailRow
-                        label="Morning Tiffin"
-                        value={customer.default_morning ? "Yes" : "No"}
-                        valueClass={customer.default_morning ? "text-success" : "text-muted"}
+                        label="Morning"
+                        value={customer.tiffin_defaults?.morning
+                            ? `${customer.tiffin_defaults.morning_qty} × ₹${customer.tiffin_defaults.morning_price}`
+                            : "Off"}
+                        valueClass={customer.tiffin_defaults?.morning ? "text-foreground" : "text-muted"}
                     />
                     <DetailRow
-                        label="Evening Tiffin"
-                        value={customer.default_evening ? "Yes" : "No"}
-                        valueClass={customer.default_evening ? "text-success" : "text-muted"}
+                        label="Evening"
+                        value={customer.tiffin_defaults?.evening
+                            ? `${customer.tiffin_defaults.evening_qty} × ₹${customer.tiffin_defaults.evening_price}`
+                            : "Off"}
+                        valueClass={customer.tiffin_defaults?.evening ? "text-foreground" : "text-muted"}
                     />
                     <div className="flex items-center gap-2 py-1.5">
                         <Calendar className="w-3.5 h-3.5 text-muted" />

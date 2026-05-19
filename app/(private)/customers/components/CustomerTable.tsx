@@ -1,12 +1,26 @@
 "use client"
 
-import { useState } from "react"
-import { Eye, Pencil, Trash2, CheckCircle2, Minus, Search, Download, SlidersHorizontal } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { useState, useMemo } from "react"
+import {
+    useReactTable,
+    getCoreRowModel,
+    getSortedRowModel,
+    flexRender,
+    createColumnHelper,
+    type SortingState,
+} from "@tanstack/react-table"
+import {
+    Eye, Pencil, Trash2, CheckCircle2, Minus,
+    Search, Download, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown,
+} from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+    Dialog, DialogContent, DialogHeader, DialogFooter,
+    DialogTitle, DialogDescription,
+} from "@/components/ui/dialog"
 import type { Customer, CustomerQueryParams } from "@/types/customer.type"
 import type { PaginationMeta } from "@/types/common.types"
 import { cn } from "@/lib/utils"
@@ -24,22 +38,16 @@ interface CustomerTableProps {
 }
 
 function getInitials(name: string) {
-    return name
-        .split(" ")
-        .slice(0, 2)
-        .map((w) => w[0])
-        .join("")
-        .toUpperCase()
+    return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
 }
 
-const avatarColors = [
-    "bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger",
-]
+const AVATAR_COLORS = ["bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger"]
 
 function getAvatarColor(name: string) {
-    const idx = name.charCodeAt(0) % avatarColors.length
-    return avatarColors[idx]
+    return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
 }
+
+const colHelper = createColumnHelper<Customer>()
 
 export default function CustomerTable({
     customers,
@@ -52,33 +60,165 @@ export default function CustomerTable({
     onDelete,
     selectedId,
 }: CustomerTableProps) {
-    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null)
+    const [sorting, setSorting] = useState<SortingState>([{ id: "full_name", desc: false }])
 
     function handleSearch(value: string) {
         onParamsChange({ ...params, search: value, page: 1 })
-    }
-
-    function handleStatusFilter(value: string) {
-        onParamsChange({
-            ...params,
-            is_active: value === "all" ? "" : value,
-            page: 1,
-        })
     }
 
     function handlePage(page: number) {
         onParamsChange({ ...params, page })
     }
 
-    function confirmDelete(id: string) {
-        if (deleteConfirmId === id) {
-            onDelete(id)
-            setDeleteConfirmId(null)
-        } else {
-            setDeleteConfirmId(id)
-            setTimeout(() => setDeleteConfirmId(null), 3000)
+    function handleSort(value: string) {
+        const map: Record<string, SortingState> = {
+            "name-asc": [{ id: "full_name", desc: false }],
+            "name-desc": [{ id: "full_name", desc: true }],
+            "newest": [{ id: "createdAt", desc: true }],
+            "oldest": [{ id: "createdAt", desc: false }],
+        }
+        setSorting(map[value] ?? [])
+    }
+
+    function handleDeleteConfirm() {
+        if (deleteTarget) {
+            onDelete(deleteTarget._id)
+            setDeleteTarget(null)
         }
     }
+
+    const columns = useMemo(() => [
+        colHelper.display({
+            id: "index",
+            header: "#",
+            cell: ({ row }) => (
+                <span className="text-muted">
+                    {((params.page ?? 1) - 1) * (params.limit ?? 10) + row.index + 1}
+                </span>
+            ),
+        }),
+        colHelper.accessor("full_name", {
+            header: ({ column }) => (
+                <button
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
+                    onClick={column.getToggleSortingHandler()}
+                >
+                    Customer
+                    {column.getIsSorted() === "asc" ? (
+                        <ArrowUp className="w-3 h-3" />
+                    ) : column.getIsSorted() === "desc" ? (
+                        <ArrowDown className="w-3 h-3" />
+                    ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                    )}
+                </button>
+            ),
+            cell: ({ row }) => {
+                const c = row.original
+                return (
+                    <div className="flex items-center gap-3">
+                        <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold",
+                            getAvatarColor(c.full_name)
+                        )}>
+                            {getInitials(c.full_name)}
+                        </div>
+                        <div>
+                            <p className="font-medium text-foreground">{c.full_name}</p>
+                            {c.address && (
+                                <p className="text-xs text-muted truncate max-w-40">{c.address}</p>
+                            )}
+                        </div>
+                    </div>
+                )
+            },
+        }),
+        colHelper.accessor("phone", {
+            header: "Phone",
+            cell: (info) => <span className="text-foreground">{info.getValue()}</span>,
+        }),
+        colHelper.display({
+            id: "tiffin_defaults",
+            header: "Default Tiffin",
+            cell: ({ row }) => {
+                const td = row.original.tiffin_defaults
+                if (!td) return <span className="text-muted text-xs">—</span>
+                const parts = []
+                if (td.morning) parts.push(`M×${td.morning_qty} ₹${td.morning_price}`)
+                if (td.evening) parts.push(`E×${td.evening_qty} ₹${td.evening_price}`)
+                return (
+                    <span className="text-foreground text-xs">
+                        {parts.length ? parts.join(" · ") : <span className="text-muted">—</span>}
+                    </span>
+                )
+            },
+        }),
+        colHelper.display({
+            id: "morning",
+            header: "Morning",
+            cell: ({ row }) => row.original.tiffin_defaults?.morning
+                ? <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                : <Minus className="w-4 h-4 text-muted mx-auto" />,
+        }),
+        colHelper.display({
+            id: "evening",
+            header: "Evening",
+            cell: ({ row }) => row.original.tiffin_defaults?.evening
+                ? <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
+                : <Minus className="w-4 h-4 text-muted mx-auto" />,
+        }),
+        colHelper.display({
+            id: "outstanding",
+            header: () => <span className="flex justify-end">Outstanding</span>,
+            cell: () => <span className="text-danger font-medium flex justify-end">₹0</span>,
+        }),
+        colHelper.display({
+            id: "actions",
+            header: () => <span className="flex justify-center">Actions</span>,
+            cell: ({ row }) => {
+                const c = row.original
+                return (
+                    <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            onClick={() => onView(c)}
+                            className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
+                            title="View details"
+                        >
+                            <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => onEdit(c)}
+                            className="p-1.5 rounded-lg hover:bg-warning/10 text-muted hover:text-warning transition-colors"
+                            title="Edit customer"
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setDeleteTarget(c)}
+                            className="p-1.5 rounded-lg hover:bg-danger/10 text-muted hover:text-danger transition-colors"
+                            title="Delete customer"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                )
+            },
+        }),
+    ], [params, onView, onEdit, setDeleteTarget])
+
+    const table = useReactTable({
+        data: customers,
+        columns,
+        getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+        state: { sorting },
+        onSortingChange: setSorting,
+        manualPagination: true,
+        pageCount: meta?.totalPages ?? -1,
+    })
+
+    const centerCols = new Set(["morning", "evening", "actions"])
 
     return (
         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
@@ -94,21 +234,7 @@ export default function CustomerTable({
                     />
                 </div>
 
-                <Select
-                    defaultValue={params.is_active === "" || params.is_active === undefined ? "all" : String(params.is_active)}
-                    onValueChange={handleStatusFilter}
-                >
-                    <SelectTrigger className="w-36">
-                        <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="true">Active</SelectItem>
-                        <SelectItem value="false">Inactive</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select defaultValue="name-asc">
+                <Select defaultValue="name-asc" onValueChange={handleSort}>
                     <SelectTrigger className="w-44">
                         <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
@@ -134,21 +260,25 @@ export default function CustomerTable({
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="border-b border-border bg-muted/10">
-                            <th className="text-left px-4 py-3 font-medium text-muted w-10">#</th>
-                            <th className="text-left px-4 py-3 font-medium text-muted">Customer</th>
-                            <th className="text-left px-4 py-3 font-medium text-muted">Phone</th>
-                            <th className="text-left px-4 py-3 font-medium text-muted">Price/Tiffin</th>
-                            <th className="text-center px-4 py-3 font-medium text-muted">Morning</th>
-                            <th className="text-center px-4 py-3 font-medium text-muted">Evening</th>
-                            <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
-                            <th className="text-right px-4 py-3 font-medium text-muted">Outstanding</th>
-                            <th className="text-center px-4 py-3 font-medium text-muted">Actions</th>
-                        </tr>
+                        {table.getHeaderGroups().map((hg) => (
+                            <tr key={hg.id} className="border-b border-border bg-muted/10">
+                                {hg.headers.map((header) => (
+                                    <th
+                                        key={header.id}
+                                        className={cn(
+                                            "px-4 py-3 font-medium text-muted text-left",
+                                            centerCols.has(header.id) && "text-center"
+                                        )}
+                                    >
+                                        {flexRender(header.column.columnDef.header, header.getContext())}
+                                    </th>
+                                ))}
+                            </tr>
+                        ))}
                     </thead>
                     <tbody>
-                        {isLoading
-                            ? [...Array(6)].map((_, i) => (
+                        {isLoading ? (
+                            [...Array(6)].map((_, i) => (
                                 <tr key={i} className="border-b border-border/50">
                                     <td className="px-4 py-3"><Skeleton className="h-4 w-4" /></td>
                                     <td className="px-4 py-3">
@@ -160,123 +290,76 @@ export default function CustomerTable({
                                             </div>
                                         </div>
                                     </td>
-                                    {[...Array(7)].map((_, j) => (
+                                    {[...Array(6)].map((_, j) => (
                                         <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                                     ))}
                                 </tr>
                             ))
-                            : customers.length === 0
-                                ? (
-                                    <tr>
-                                        <td colSpan={9} className="text-center py-12 text-muted">
-                                            No customers found
-                                        </td>
+                        ) : table.getRowModel().rows.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="text-center py-12 text-muted">
+                                    No customers found
+                                </td>
+                            </tr>
+                        ) : (
+                            table.getRowModel().rows.map((row) => {
+                                const isSelected = row.original._id === selectedId
+                                return (
+                                    <tr
+                                        key={row.id}
+                                        className={cn(
+                                            "border-b border-border/50 transition-colors hover:bg-muted/5 cursor-pointer",
+                                            isSelected && "bg-primary/5"
+                                        )}
+                                        onClick={() => onView(row.original)}
+                                    >
+                                        {row.getVisibleCells().map((cell) => (
+                                            <td
+                                                key={cell.id}
+                                                className={cn(
+                                                    "px-4 py-3",
+                                                    centerCols.has(cell.column.id) && "text-center"
+                                                )}
+                                            >
+                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                            </td>
+                                        ))}
                                     </tr>
                                 )
-                                : customers.map((customer, idx) => {
-                                    const rowNum = ((params.page ?? 1) - 1) * (params.limit ?? 10) + idx + 1
-                                    const isSelected = customer._id === selectedId
-                                    return (
-                                        <tr
-                                            key={customer._id}
-                                            className={cn(
-                                                "border-b border-border/50 transition-colors hover:bg-muted/5 cursor-pointer",
-                                                isSelected && "bg-primary/5"
-                                            )}
-                                            onClick={() => onView(customer)}
-                                        >
-                                            <td className="px-4 py-3 text-muted">{rowNum}</td>
-
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={cn(
-                                                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold",
-                                                        getAvatarColor(customer.full_name)
-                                                    )}>
-                                                        {getInitials(customer.full_name)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-foreground">{customer.full_name}</p>
-                                                        {customer.address && (
-                                                            <p className="text-xs text-muted truncate max-w-40">{customer.address}</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-foreground">{customer.phone}</td>
-
-                                            <td className="px-4 py-3 text-foreground">
-                                                ₹{(customer.price_morning + customer.price_evening) / 2}
-                                            </td>
-
-                                            <td className="px-4 py-3 text-center">
-                                                {customer.default_morning
-                                                    ? <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
-                                                    : <Minus className="w-4 h-4 text-muted mx-auto" />
-                                                }
-                                            </td>
-
-                                            <td className="px-4 py-3 text-center">
-                                                {customer.default_evening
-                                                    ? <CheckCircle2 className="w-4 h-4 text-success mx-auto" />
-                                                    : <Minus className="w-4 h-4 text-muted mx-auto" />
-                                                }
-                                            </td>
-
-                                            <td className="px-4 py-3">
-                                                <Badge variant={customer.is_active ? "success" : "destructive"}>
-                                                    {customer.is_active ? "Active" : "Inactive"}
-                                                </Badge>
-                                            </td>
-
-                                            <td className="px-4 py-3 text-right text-danger font-medium">
-                                                ₹0
-                                            </td>
-
-                                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <button
-                                                        onClick={() => onView(customer)}
-                                                        className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
-                                                        title="View details"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => onEdit(customer)}
-                                                        className="p-1.5 rounded-lg hover:bg-warning/10 text-muted hover:text-warning transition-colors"
-                                                        title="Edit customer"
-                                                    >
-                                                        <Pencil className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => confirmDelete(customer._id)}
-                                                        className={cn(
-                                                            "p-1.5 rounded-lg transition-colors",
-                                                            deleteConfirmId === customer._id
-                                                                ? "bg-danger/10 text-danger"
-                                                                : "hover:bg-danger/10 text-muted hover:text-danger"
-                                                        )}
-                                                        title={deleteConfirmId === customer._id ? "Click again to confirm" : "Deactivate"}
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })
-                        }
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
+
+            {/* Delete confirmation dialog */}
+            <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete Customer</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete{" "}
+                            <span className="font-medium text-foreground">{deleteTarget?.full_name}</span>?
+                            This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteConfirm}>
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Pagination */}
             {meta && meta.totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted">
                     <span>
-                        Showing {((meta.page - 1) * meta.limit) + 1} to {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} customers
+                        Showing {((meta.page - 1) * meta.limit) + 1} to{" "}
+                        {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} customers
                     </span>
                     <div className="flex items-center gap-1">
                         <Button
