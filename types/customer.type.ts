@@ -1,15 +1,21 @@
 import type { Document } from 'mongoose';
 
+export interface ITiffinDefaults {
+    morning: boolean;
+    morning_qty: number;
+    morning_price: number;
+    evening: boolean;
+    evening_qty: number;
+    evening_price: number;
+}
+
 export interface ICustomer extends Document {
     full_name: string;
     phone: string;
     address?: string;
-    default_morning: boolean;
-    default_evening: boolean;
-    price_morning: number;
-    price_evening: number;
-    is_active: boolean;
     notes?: string;
+    is_active: boolean;
+    tiffin_defaults: ITiffinDefaults;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -19,32 +25,17 @@ export interface Customer {
     full_name: string;
     phone: string;
     address?: string;
-    default_morning: boolean;
-    default_evening: boolean;
-    price_morning: number;
-    price_evening: number;
-    is_active: boolean;
     notes?: string;
+    is_active: boolean;
+    tiffin_defaults: ITiffinDefaults;
     createdAt: string;
     updatedAt: string;
-}
-
-export interface CustomerFormData {
-    full_name: string;
-    phone: string;
-    address?: string;
-    default_morning: boolean;
-    default_evening: boolean;
-    price_morning: number;
-    price_evening: number;
-    notes?: string;
 }
 
 export interface CustomerQueryParams {
     page?: number;
     limit?: number;
     search?: string;
-    is_active?: boolean | string;
     sort?: string;
 }
 

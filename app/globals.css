@@ -86,7 +86,8 @@
   --warning-light: #FFEDD5;
 
   --danger: #DC2626;
-  --danger-light: #FEE2E2;
+  --danger-light: #FEF5F6;
+  --danger-border: #FEEAEC;
 
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
@@ -165,5 +166,16 @@
 
   html {
     @apply font-sans;
+  }
+
+  /* Remove native spinners from all number inputs */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }

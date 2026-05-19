@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -27,7 +28,8 @@ export default function LoginPage() {
         setLoading(false);
 
         if (res?.ok) {
-            router.push("/dashboard");
+            const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+            router.push(callbackUrl);
             router.refresh();
         } else {
             setError("Invalid email or password.");

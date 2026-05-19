@@ -1,10 +1,13 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { X, Loader2, RotateCcw, Info } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { useTiffinPreview, useBulkSaveTiffin } from "@/hooks/useTiffin"
 import type { BulkPreviewRow } from "@/types/tiffin.type"
 import { cn } from "@/lib/utils"
@@ -23,7 +26,7 @@ interface BulkCopyModalProps {
     onClose: () => void
 }
 
-// ─── Keyboard navigation helpers ─────────────────────────────────────────────
+// ─── Keyboard navigation ──────────────────────────────────────────────────────
 
 const COLS = ["morning", "evening", "price"] as const
 type EditableCol = (typeof COLS)[number]
@@ -32,56 +35,7 @@ function cellId(rowIdx: number, col: EditableCol) {
     return `bk-${rowIdx}-${col}`
 }
 
-function focusCell(rowIdx: number, col: EditableCol, maxRow: number) {
-    if (rowIdx < 0 || rowIdx >= maxRow) return
-    const el = document.getElementById(cellId(rowIdx, col))
-    if (!el) return
-    el.focus()
-    if (el instanceof HTMLInputElement) el.select()
-}
-
-function handleKeyNav(
-    e: React.KeyboardEvent,
-    rowIdx: number,
-    col: EditableCol,
-    maxRow: number
-) {
-    const ci = COLS.indexOf(col)
-
-    switch (e.key) {
-        case "Tab": {
-            e.preventDefault()
-            const next = e.shiftKey ? ci - 1 : ci + 1
-            if (next >= 0 && next < COLS.length) {
-                focusCell(rowIdx, COLS[next], maxRow)
-            } else if (next >= COLS.length) {
-                focusCell(rowIdx + 1, COLS[0], maxRow)
-            } else {
-                focusCell(rowIdx - 1, COLS[COLS.length - 1], maxRow)
-            }
-            break
-        }
-        case "ArrowRight":
-            e.preventDefault()
-            focusCell(rowIdx, COLS[(ci + 1) % COLS.length], maxRow)
-            break
-        case "ArrowLeft":
-            e.preventDefault()
-            focusCell(rowIdx, COLS[(ci - 1 + COLS.length) % COLS.length], maxRow)
-            break
-        case "Enter":
-        case "ArrowDown":
-            e.preventDefault()
-            focusCell(rowIdx + 1, col, maxRow)
-            break
-        case "ArrowUp":
-            e.preventDefault()
-            focusCell(rowIdx - 1, col, maxRow)
-            break
-    }
-}
-
-// ─── Date display helpers ─────────────────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
 function displayDate(iso: string): string {
     if (!iso) return ""
@@ -91,22 +45,10 @@ function displayDate(iso: string): string {
     })
 }
 
-function toISO(d: Date) {
-    return d.toISOString().split("T")[0]
-}
-
-function isYesterday(iso: string) {
-    const d = new Date(); d.setDate(d.getDate() - 1)
-    return iso === toISO(d)
-}
-function isTomorrow(iso: string) {
-    const d = new Date(); d.setDate(d.getDate() + 1)
-    return iso === toISO(d)
-}
-function isToday(iso: string) {
-    return iso === toISO(new Date())
-}
-
+function toISO(d: Date) { return d.toISOString().split("T")[0] }
+function isYesterday(iso: string) { const d = new Date(); d.setDate(d.getDate() - 1); return iso === toISO(d) }
+function isTomorrow(iso: string) { const d = new Date(); d.setDate(d.getDate() + 1); return iso === toISO(d) }
+function isToday(iso: string) { return iso === toISO(new Date()) }
 function dateLabel(iso: string) {
     if (isYesterday(iso)) return "Yesterday"
     if (isToday(iso)) return "Today"
@@ -114,31 +56,19 @@ function dateLabel(iso: string) {
     return displayDate(iso)
 }
 
-// ─── Row calculation ──────────────────────────────────────────────────────────
+// ─── Row helpers ──────────────────────────────────────────────────────────────
 
 function calcTotal(row: Pick<BulkRow, "morning" | "evening" | "price">) {
     return ((row.morning ? 1 : 0) + (row.evening ? 1 : 0)) * row.price
 }
 
 function buildRows(previewRows: BulkPreviewRow[]): BulkRow[] {
-    return previewRows.map((r) => ({
-        ...r,
-        total: calcTotal(r),
-        changed: false,
-    }))
+    return previewRows.map((r) => ({ ...r, total: calcTotal(r), changed: false }))
 }
 
-// ─── Avatar helpers ───────────────────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-    "bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger",
-]
-function avatarColor(name: string) {
-    return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]
-}
-function initials(name: string) {
-    return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
-}
+const AVATAR_COLORS = ["bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger"]
+function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length] }
+function initials(name: string) { return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase() }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -147,12 +77,11 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
     const [originalRows, setOriginalRows] = useState<BulkRow[]>([])
     const [hideZero, setHideZero] = useState(false)
 
-    const { data: previewData, isLoading: previewLoading } = useTiffinPreview(
-        open ? fromDate : null
-    )
+    const tableScrollRef = useRef<HTMLDivElement>(null)
+
+    const { data: previewData, isLoading: previewLoading } = useTiffinPreview(open ? fromDate : null)
     const saveMutation = useBulkSaveTiffin()
 
-    // Initialise rows when preview data arrives
     useEffect(() => {
         if (previewData?.data) {
             const built = buildRows(previewData.data)
@@ -161,7 +90,6 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
         }
     }, [previewData])
 
-    // Reset when modal closes
     useEffect(() => {
         if (!open) {
             setRows([])
@@ -169,8 +97,6 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
             setHideZero(false)
         }
     }, [open])
-
-    // ── Row update logic ────────────────────────────────────────────────────
 
     const updateRow = useCallback(
         (realIdx: number, field: "morning" | "evening" | "price", value: boolean | number) => {
@@ -186,18 +112,62 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
         []
     )
 
-    // ── Derived values ──────────────────────────────────────────────────────
-
     const visibleRows = hideZero ? rows.filter((r) => r.total > 0) : rows
     const grandTotal = rows.reduce((s, r) => s + r.total, 0)
     const changedCount = rows.filter((r) => r.changed).length
 
-    // Real index lookup (needed when hideZero filters out rows)
     function realIndex(row: BulkRow): number {
         return rows.findIndex((r) => r.customerId === row.customerId)
     }
 
-    // ── Save ────────────────────────────────────────────────────────────────
+    // ── Virtualizer ────────────────────────────────────────────────────────────
+
+    const virtualizer = useVirtualizer({
+        count: visibleRows.length,
+        getScrollElement: () => tableScrollRef.current,
+        estimateSize: () => 57,
+        overscan: 8,
+    })
+
+    // ── Keyboard navigation with virtual scroll ────────────────────────────────
+
+    function focusCell(rowIdx: number, col: EditableCol, maxRow: number) {
+        if (rowIdx < 0 || rowIdx >= maxRow) return
+        virtualizer.scrollToIndex(rowIdx, { align: "auto" })
+        // give React a frame to render the newly visible row before focusing
+        setTimeout(() => {
+            const el = document.getElementById(cellId(rowIdx, col))
+            if (!el) return
+            el.focus()
+            if (el instanceof HTMLInputElement) el.select()
+        }, 30)
+    }
+
+    function handleKeyNav(e: React.KeyboardEvent, rowIdx: number, col: EditableCol) {
+        const ci = COLS.indexOf(col)
+        const maxRow = visibleRows.length
+        switch (e.key) {
+            case "Tab": {
+                e.preventDefault()
+                const next = e.shiftKey ? ci - 1 : ci + 1
+                if (next >= 0 && next < COLS.length) focusCell(rowIdx, COLS[next], maxRow)
+                else if (next >= COLS.length) focusCell(rowIdx + 1, COLS[0], maxRow)
+                else focusCell(rowIdx - 1, COLS[COLS.length - 1], maxRow)
+                break
+            }
+            case "ArrowRight":
+                e.preventDefault(); focusCell(rowIdx, COLS[(ci + 1) % COLS.length], maxRow); break
+            case "ArrowLeft":
+                e.preventDefault(); focusCell(rowIdx, COLS[(ci - 1 + COLS.length) % COLS.length], maxRow); break
+            case "Enter":
+            case "ArrowDown":
+                e.preventDefault(); focusCell(rowIdx + 1, col, maxRow); break
+            case "ArrowUp":
+                e.preventDefault(); focusCell(rowIdx - 1, col, maxRow); break
+        }
+    }
+
+    // ── Save / Reset ───────────────────────────────────────────────────────────
 
     async function handleSave() {
         try {
@@ -213,10 +183,8 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
             toast.success(`Saved tiffin data for ${rows.length} customers on ${displayDate(toDate)}`)
             onClose()
         } catch (err: unknown) {
-            const msg =
-                err && typeof err === "object" && "message" in err
-                    ? String((err as { message: string }).message)
-                    : "Failed to save"
+            const msg = err && typeof err === "object" && "message" in err
+                ? String((err as { message: string }).message) : "Failed to save"
             toast.error(msg)
         }
     }
@@ -227,13 +195,17 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
 
     if (!open) return null
 
+    const virtualItems = virtualizer.getVirtualItems()
+    const paddingTop = virtualItems.length > 0 ? (virtualItems[0]?.start ?? 0) : 0
+    const paddingBottom = virtualItems.length > 0
+        ? virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)
+        : 0
+
     return (
-        // Backdrop
         <div
             className="fixed inset-0 z-50 bg-black/40 flex items-start justify-end"
             onClick={(e) => e.target === e.currentTarget && onClose()}
         >
-            {/* Panel */}
             <div className="relative w-full max-w-3xl h-full bg-background shadow-2xl flex flex-col">
 
                 {/* ── Header ── */}
@@ -283,23 +255,11 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                             <span className="text-sm text-muted">Hide zero entries</span>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={hideZero}
-                                onClick={() => setHideZero((v) => !v)}
-                                className={cn(
-                                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200",
-                                    hideZero ? "bg-primary" : "bg-muted/30"
-                                )}
-                            >
-                                <span
-                                    className={cn(
-                                        "pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition duration-200 mt-0.5",
-                                        hideZero ? "translate-x-4" : "translate-x-0"
-                                    )}
-                                />
-                            </button>
+                            <Switch
+                                checked={hideZero}
+                                onCheckedChange={setHideZero}
+                                aria-label="Hide zero entries"
+                            />
                         </div>
                         <span className="text-sm text-muted">
                             Total Customers:{" "}
@@ -308,8 +268,8 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                     </div>
                 </div>
 
-                {/* ── Table ── */}
-                <div className="flex-1 overflow-auto">
+                {/* ── Table (virtualized) ── */}
+                <div ref={tableScrollRef} className="flex-1 overflow-auto">
                     {previewLoading ? (
                         <div className="p-6 space-y-3">
                             {[...Array(6)].map((_, i) => (
@@ -324,37 +284,38 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                     <th className="text-left px-4 py-3 font-medium text-muted">Customer Name</th>
                                     <th className="text-center px-4 py-3 font-medium text-muted w-24">
                                         <div className="flex items-center justify-center gap-1">
-                                            Morning
-                                            <Info className="w-3 h-3 text-muted/60" />
+                                            Morning <Info className="w-3 h-3 text-muted/60" />
                                         </div>
                                     </th>
                                     <th className="text-center px-4 py-3 font-medium text-muted w-24">
                                         <div className="flex items-center justify-center gap-1">
-                                            Evening
-                                            <Info className="w-3 h-3 text-muted/60" />
+                                            Evening <Info className="w-3 h-3 text-muted/60" />
                                         </div>
                                     </th>
                                     <th className="text-right px-4 py-3 font-medium text-muted w-36">
                                         <div className="flex items-center justify-end gap-1">
-                                            Price / Tiffin (₹)
-                                            <Info className="w-3 h-3 text-muted/60" />
+                                            Price / Tiffin (₹) <Info className="w-3 h-3 text-muted/60" />
                                         </div>
                                     </th>
                                     <th className="text-right px-4 py-3 font-medium text-muted w-28">
                                         <div className="flex items-center justify-end gap-1">
-                                            Total (₹)
-                                            <Info className="w-3 h-3 text-muted/60" />
+                                            Total (₹) <Info className="w-3 h-3 text-muted/60" />
                                         </div>
                                     </th>
                                 </tr>
                             </thead>
-
-                            <tbody>
-                                {visibleRows.map((row, visIdx) => {
+                            <tbody style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+                                {paddingTop > 0 && (
+                                    <tr><td style={{ height: paddingTop }} /></tr>
+                                )}
+                                {virtualItems.map((virtualItem) => {
+                                    const row = visibleRows[virtualItem.index]!
                                     const ri = realIndex(row)
+                                    const visIdx = virtualItem.index
                                     return (
                                         <tr
                                             key={row.customerId}
+                                            data-index={virtualItem.index}
                                             className={cn(
                                                 "border-b border-border/40 transition-colors",
                                                 row.changed
@@ -362,10 +323,8 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                                     : "hover:bg-muted/5"
                                             )}
                                         >
-                                            {/* # */}
                                             <td className="px-4 py-3 text-muted text-center">{visIdx + 1}</td>
 
-                                            {/* Customer */}
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <div className={cn(
@@ -383,31 +342,26 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                                 </div>
                                             </td>
 
-                                            {/* Morning checkbox */}
                                             <td className="px-4 py-3 text-center">
-                                                <input
+                                                <Checkbox
                                                     id={cellId(ri, "morning")}
-                                                    type="checkbox"
                                                     checked={row.morning}
-                                                    onChange={(e) => updateRow(ri, "morning", e.target.checked)}
-                                                    onKeyDown={(e) => handleKeyNav(e, ri, "morning", rows.length)}
-                                                    className="w-5 h-5 rounded border-2 border-slate-300 checked:bg-primary checked:border-primary focus:ring-2 focus:ring-primary/30 cursor-pointer accent-primary"
+                                                    onCheckedChange={(v) => updateRow(ri, "morning", !!v)}
+                                                    onKeyDown={(e) => handleKeyNav(e, visIdx, "morning")}
+                                                    className="w-5 h-5 mx-auto"
                                                 />
                                             </td>
 
-                                            {/* Evening checkbox */}
                                             <td className="px-4 py-3 text-center">
-                                                <input
+                                                <Checkbox
                                                     id={cellId(ri, "evening")}
-                                                    type="checkbox"
                                                     checked={row.evening}
-                                                    onChange={(e) => updateRow(ri, "evening", e.target.checked)}
-                                                    onKeyDown={(e) => handleKeyNav(e, ri, "evening", rows.length)}
-                                                    className="w-5 h-5 rounded border-2 border-slate-300 checked:bg-primary checked:border-primary focus:ring-2 focus:ring-primary/30 cursor-pointer accent-primary"
+                                                    onCheckedChange={(v) => updateRow(ri, "evening", !!v)}
+                                                    onKeyDown={(e) => handleKeyNav(e, visIdx, "evening")}
+                                                    className="w-5 h-5 mx-auto"
                                                 />
                                             </td>
 
-                                            {/* Price input */}
                                             <td className="px-4 py-3">
                                                 <input
                                                     id={cellId(ri, "price")}
@@ -419,12 +373,11 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                                         const v = parseFloat(e.target.value)
                                                         if (!isNaN(v) && v >= 0) updateRow(ri, "price", v)
                                                     }}
-                                                    onKeyDown={(e) => handleKeyNav(e, ri, "price", rows.length)}
+                                                    onKeyDown={(e) => handleKeyNav(e, visIdx, "price")}
                                                     className="h-8 w-24 rounded-lg border border-input bg-background text-right px-2.5 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ml-auto block"
                                                 />
                                             </td>
 
-                                            {/* Total (read-only) */}
                                             <td className={cn(
                                                 "px-4 py-3 text-right font-semibold tabular-nums",
                                                 row.total === 0 ? "text-warning" : "text-success"
@@ -434,6 +387,9 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                         </tr>
                                     )
                                 })}
+                                {paddingBottom > 0 && (
+                                    <tr><td style={{ height: paddingBottom }} /></tr>
+                                )}
 
                                 {visibleRows.length === 0 && (
                                     <tr>
@@ -452,7 +408,6 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                 {/* ── Footer ── */}
                 <div className="border-t border-border px-6 py-4 shrink-0 bg-background">
                     <div className="flex items-center justify-between">
-                        {/* Changed notice + grand total */}
                         <div className="flex items-center gap-4">
                             {changedCount > 0 && (
                                 <div className="flex items-center gap-1.5 text-sm text-primary">
@@ -460,7 +415,6 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                     Rows highlighted in blue have unsaved changes
                                 </div>
                             )}
-                            {changedCount === 0 && <div />}
                         </div>
                         <div className="text-sm font-semibold text-foreground">
                             Grand Total{" "}

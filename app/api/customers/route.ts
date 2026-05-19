@@ -16,19 +16,14 @@ export async function GET(request: NextRequest) {
         const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
         const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '10')));
         const search = searchParams.get('search') ?? '';
-        const isActiveParam = searchParams.get('is_active');
 
-        const filter: Record<string, unknown> = {};
+        const filter: Record<string, unknown> = { is_active: true };
 
         if (search.trim()) {
             filter.$or = [
                 { full_name: { $regex: search.trim(), $options: 'i' } },
                 { phone: { $regex: search.trim(), $options: 'i' } },
             ];
-        }
-
-        if (isActiveParam !== null && isActiveParam !== '') {
-            filter.is_active = isActiveParam === 'true';
         }
 
         const [customers, total] = await Promise.all([

@@ -6,7 +6,23 @@
       "Bash(rmdir models *)",
       "Bash(npx tsc *)",
       "Bash(node -e \"const r = require\\('radix-ui'\\); console.log\\(Object.keys\\(r\\).slice\\(0,30\\)\\)\")",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(node -e \"const pkg = require\\('./package.json'\\); console.log\\('@tanstack/react-form:', pkg.dependencies['@tanstack/react-form']\\); console.log\\('@tanstack/react-table:', pkg.dependencies['@tanstack/react-table']\\); console.log\\('@tanstack/react-virtual:', pkg.dependencies['@tanstack/react-virtual']\\);\")",
+      "Bash(npx shadcn@latest add card textarea table popover tooltip tabs switch checkbox calendar --yes)",
+      "Bash(node -e \"const tf = require\\('@tanstack/react-form'\\); console.log\\('exports:', Object.keys\\(tf\\).slice\\(0,20\\)\\)\")",
+      "Bash(node -e \"const { version } = require\\('@tanstack/react-form/package.json'\\); console.log\\('version:', version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(Get-ChildItem -Recurse \"d:\\\\neelkanth-tiffin-dashboard\\\\app\\\\\\(private\\)\\\\customers\" -Filter \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(node \"d:/neelkanth-tiffin-dashboard/node_modules/next/dist/bin/next\" dev --help)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\neelkanth-tiffin-dashboard\" -Recurse -Force | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\(\"d:\\\\neelkanth-tiffin-dashboard\\\\\", \"\"\\) } | Sort-Object | head -150)",
+      "Bash(npm list *)",
+      "Bash(Select-String \"bson\")",
+      "Bash(Get-ChildItem -Path \"d:\\\\neelkanth-tiffin-dashboard\" -Recurse -Depth 3)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }

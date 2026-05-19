@@ -1,9 +1,9 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import type { Customer, CustomerFormData, CustomerQueryParams, CustomerStats } from "@/types/customer.type"
-import type { ApiSuccess } from "@/types/common.types"
-import type { PaginationMeta } from "@/types/common.types"
+import type { Customer, CustomerQueryParams, CustomerStats } from "@/types/customer.type"
+import type { CreateCustomerInput, UpdateCustomerInput } from "@/lib/validations/customer.validation"
+import type { ApiSuccess, PaginationMeta } from "@/types/common.types"
 
 type CustomerListResponse = ApiSuccess<Customer[]> & { meta: PaginationMeta }
 type CustomerResponse = ApiSuccess<Customer>
@@ -24,9 +24,6 @@ function buildCustomerUrl(params: CustomerQueryParams): string {
     if (params.page) sp.set("page", String(params.page))
     if (params.limit) sp.set("limit", String(params.limit))
     if (params.search?.trim()) sp.set("search", params.search.trim())
-    if (params.is_active !== undefined && params.is_active !== "") {
-        sp.set("is_active", String(params.is_active))
-    }
     return `/api/customers?${sp.toString()}`
 }
 
@@ -55,7 +52,7 @@ export function useCustomerStats() {
 export function useCreateCustomer() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (data: CustomerFormData) =>
+        mutationFn: (data: CreateCustomerInput) =>
             apiFetch<CustomerResponse>("/api/customers", {
                 method: "POST",
                 body: JSON.stringify(data),
@@ -69,7 +66,7 @@ export function useCreateCustomer() {
 export function useUpdateCustomer() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<CustomerFormData> }) =>
+        mutationFn: ({ id, data }: { id: string; data: UpdateCustomerInput }) =>
             apiFetch<CustomerResponse>(`/api/customers/${id}`, {
                 method: "PATCH",
                 body: JSON.stringify(data),

@@ -15,7 +15,11 @@ function getClientIp(request: NextRequest): string {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
-    if (!pathname.startsWith('/api/')) return NextResponse.next()
+    if (!pathname.startsWith('/api/')) {
+        const response = NextResponse.next()
+        response.headers.set('x-pathname', pathname)
+        return response
+    }
     if (pathname.startsWith('/api/auth')) return NextResponse.next()
 
     const ip = getClientIp(request)
@@ -55,5 +59,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/api/:path*'],
+    matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
