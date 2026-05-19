@@ -29,21 +29,29 @@ export async function GET(request: NextRequest) {
 
         const [customers, entries] = await Promise.all([
             Customer.find({ is_active: true }).lean(),
-            TiffinEntry.find({ date: { $gte: dateObj, $lt: nextDay } }).lean(),
+            TiffinEntry.find({ entry_date: { $gte: dateObj, $lt: nextDay } }).lean(),
         ])
 
-        // Build a fast lookup map: customerId → existing entry
-        const entryMap = new Map(entries.map((e) => [String(e.customerId), e]))
+        // Build a fast lookup map: customer_id → existing entry
+        const entryMap = new Map(entries.map((e) => [String(e.customer_id), e]))
 
         const rows: BulkPreviewRow[] = customers.map((c) => {
             const entry = entryMap.get(String(c._id))
+            const def = c.tiffin_defaults
             return {
-                customerId: String(c._id),
+                customer_id: String(c._id),
                 name: c.full_name,
                 address: c.address,
-                morning: entry ? entry.morning_qty > 0 : c.default_morning,
-                evening: entry ? entry.evening_qty > 0 : c.default_evening,
-                price: entry ? entry.price_per_tiffin : c.price_morning,
+                morning: entry ? entry.morning_qty > 0 : def.morning,
+                morning_qty: entry ? entry.morning_qty : def.morning_qty,
+                morning_price: entry ? entry.morning_price : def.morning_price,
+                morning_paid: entry ? entry.morning_paid : false,
+                evening: entry ? entry.evening_qty > 0 : def.evening,
+                evening_qty: entry ? entry.evening_qty : def.evening_qty,
+                evening_price: entry ? entry.evening_price : def.evening_price,
+                evening_paid: entry ? entry.evening_paid : false,
+                has_existing_entry: !!entry,
+                price: entry ? entry.morning_price : def.morning_price,
             }
         })
 

@@ -286,7 +286,7 @@ export default function ExpenseForm({ open, expense, onClose, onSubmit, isLoadin
                             {(field) => (
                                 <div className="space-y-1.5">
                                     <Label>Payment Method *</Label>
-                                    <Select value={field.state.value} onValueChange={field.handleChange}>
+                                    <Select value={field.state.value} onValueChange={(v) => field.handleChange(v as never)}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
@@ -306,7 +306,7 @@ export default function ExpenseForm({ open, expense, onClose, onSubmit, isLoadin
                             {(field) => (
                                 <div className="space-y-1.5">
                                     <Label>Status</Label>
-                                    <Select value={field.state.value} onValueChange={field.handleChange}>
+                                    <Select value={field.state.value} onValueChange={(v) => field.handleChange(v as never)}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
@@ -382,7 +382,7 @@ export default function ExpenseForm({ open, expense, onClose, onSubmit, isLoadin
                                         <Label>Recurring Frequency</Label>
                                         <Select
                                             value={field.state.value ?? ""}
-                                            onValueChange={field.handleChange}
+                                            onValueChange={(v) => field.handleChange(v as never)}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select frequency" />

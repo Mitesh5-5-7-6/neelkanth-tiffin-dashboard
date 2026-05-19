@@ -117,7 +117,7 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
     const changedCount = rows.filter((r) => r.changed).length
 
     function realIndex(row: BulkRow): number {
-        return rows.findIndex((r) => r.customerId === row.customerId)
+        return rows.findIndex((r) => r.customer_id === row.customer_id)
     }
 
     // ── Virtualizer ────────────────────────────────────────────────────────────
@@ -172,12 +172,15 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
     async function handleSave() {
         try {
             await saveMutation.mutateAsync({
-                date: toDate,
+                entry_date: toDate,
                 entries: rows.map((r) => ({
-                    customerId: r.customerId,
-                    morning: r.morning,
-                    evening: r.evening,
-                    price: r.price,
+                    customer_id: r.customer_id,
+                    morning_qty: r.morning ? (r.morning_qty || 1) : 0,
+                    morning_price: r.price,
+                    morning_paid: r.morning_paid,
+                    evening_qty: r.evening ? (r.evening_qty || 1) : 0,
+                    evening_price: r.price,
+                    evening_paid: r.evening_paid,
                 })),
             })
             toast.success(`Saved tiffin data for ${rows.length} customers on ${displayDate(toDate)}`)
@@ -314,7 +317,7 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                     const visIdx = virtualItem.index
                                     return (
                                         <tr
-                                            key={row.customerId}
+                                            key={row.customer_id}
                                             data-index={virtualItem.index}
                                             className={cn(
                                                 "border-b border-border/40 transition-colors",

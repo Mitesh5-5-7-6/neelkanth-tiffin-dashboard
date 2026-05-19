@@ -177,7 +177,7 @@ export default function ExpenseTable({
                         )
                     })}
                     {row.original.is_recurring && (
-                        <RepeatIcon className="w-3 h-3 text-primary shrink-0" title="Recurring" />
+                        <RepeatIcon className="w-3 h-3 text-primary shrink-0" aria-label="Recurring" />
                     )}
                 </div>
             ),

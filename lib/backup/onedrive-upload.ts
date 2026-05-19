@@ -60,7 +60,7 @@ async function simpleUpload(
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/octet-stream',
         },
-        body: buffer,
+        body: buffer as unknown as Uint8Array<ArrayBuffer>,
     });
 
     if (!res.ok) {
@@ -111,7 +111,7 @@ async function chunkedUpload(
                 'Content-Range': `bytes ${offset}-${end - 1}/${totalSize}`,
                 'Content-Length': String(chunk.length),
             },
-            body: chunk,
+            body: chunk as unknown as Uint8Array<ArrayBuffer>,
         });
 
         // 202 = chunk accepted, more chunks expected; 200/201 = upload complete
