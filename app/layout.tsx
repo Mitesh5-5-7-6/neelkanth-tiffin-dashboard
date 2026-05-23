@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import SessionWrapper from "@/components/SessionWrapper";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Analytics } from '@vercel/analytics/next';
 
 const sora = Sora({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
@@ -28,6 +29,7 @@ export default function RootLayout({
             {children}
           </TooltipProvider>
         </SessionWrapper>
+        <Analytics />
       </body>
     </html>
   );
