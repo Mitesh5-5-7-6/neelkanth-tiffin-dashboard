@@ -22,7 +22,8 @@
       "Bash(Select-String \"bson\")",
       "Bash(Get-ChildItem -Path \"d:\\\\neelkanth-tiffin-dashboard\" -Recurse -Depth 3)",
       "Bash(Select-Object FullName, PSIsContainer)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "Bash(Select-Object Name, Mode)"
     ]
   }
 }
