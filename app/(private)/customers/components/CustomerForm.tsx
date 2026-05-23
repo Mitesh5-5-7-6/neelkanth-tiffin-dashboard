@@ -1,16 +1,21 @@
 "use client"
 
-import { useEffect } from "react"
-import { useForm, Controller } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useEffect, useState } from "react"
+import { useForm } from "@tanstack/react-form"
 import { Loader2 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createCustomerSchema, type CreateCustomerInput } from "@/lib/validations/customer.validation"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import {
+    createCustomerSchema,
+    tiffinDefaultsSchema,
+    type CreateCustomerInput,
+} from "@/lib/validations/customer.validation"
+import { zodField } from "@/lib/validations/utils"
 import type { Customer } from "@/types/customer.type"
-import { cn } from "@/lib/utils"
 
 interface CustomerFormProps {
     open: boolean
@@ -20,92 +25,70 @@ interface CustomerFormProps {
     isLoading: boolean
 }
 
-function ToggleField({
-    label,
-    checked,
-    onChange,
-}: {
-    label: string
-    checked: boolean
-    onChange: (v: boolean) => void
-}) {
-    return (
-        <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">{label}</span>
-            <button
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                onClick={() => onChange(!checked)}
-                className={cn(
-                    "relative inline-flex h-6 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                    checked ? "bg-primary" : "bg-muted/30"
-                )}
-            >
-                <span
-                    className={cn(
-                        "pointer-events-none inline-block h-4 w-4 translate-x-0 rounded-full bg-white shadow-lg ring-0 transition duration-200",
-                        checked ? "translate-x-4" : "translate-x-0"
-                    )}
-                />
-            </button>
-        </div>
-    )
+const EMPTY_DEFAULTS: CreateCustomerInput = {
+    full_name: "",
+    phone: "",
+    address: "",
+    notes: "",
+    tiffin_defaults: {
+        morning: true,
+        morning_qty: 1,
+        morning_price: 30,
+        evening: true,
+        evening_qty: 1,
+        evening_price: 30,
+    },
+}
+
+function toFormValues(customer: Customer): CreateCustomerInput {
+    return {
+        full_name: customer.full_name,
+        phone: customer.phone,
+        address: customer.address ?? "",
+        notes: customer.notes ?? "",
+        tiffin_defaults: {
+            morning: customer.tiffin_defaults.morning,
+            morning_qty: customer.tiffin_defaults.morning_qty,
+            morning_price: customer.tiffin_defaults.morning_price,
+            evening: customer.tiffin_defaults.evening,
+            evening_qty: customer.tiffin_defaults.evening_qty,
+            evening_price: customer.tiffin_defaults.evening_price,
+        },
+    }
+}
+
+function FieldError({ errors, show }: { errors: unknown[]; show: boolean }) {
+    if (!show) return null
+    const msg = errors.find((e): e is string => typeof e === "string" && e.length > 0)
+    if (!msg) return null
+    return <p className="text-xs text-danger">{msg}</p>
 }
 
 export default function CustomerForm({ open, customer, onClose, onSubmit, isLoading }: CustomerFormProps) {
     const isEdit = !!customer
+    const [submitted, setSubmitted] = useState(false)
 
-    const {
-        register,
-        handleSubmit,
-        control,
-        reset,
-        formState: { errors },
-    } = useForm<CreateCustomerInput>({
-        resolver: zodResolver(createCustomerSchema),
-        defaultValues: {
-            full_name: "",
-            phone: "",
-            address: "",
-            default_morning: true,
-            default_evening: true,
-            price_morning: 30,
-            price_evening: 30,
-            notes: "",
+    const form = useForm({
+        defaultValues: EMPTY_DEFAULTS,
+        onSubmit: async ({ value }) => {
+            const result = createCustomerSchema.safeParse(value)
+            if (result.success) {
+                await onSubmit(result.data)
+            }
         },
     })
 
     useEffect(() => {
         if (open) {
-            reset(
-                customer
-                    ? {
-                        full_name: customer.full_name,
-                        phone: customer.phone,
-                        address: customer.address ?? "",
-                        default_morning: customer.default_morning,
-                        default_evening: customer.default_evening,
-                        price_morning: customer.price_morning,
-                        price_evening: customer.price_evening,
-                        notes: customer.notes ?? "",
-                    }
-                    : {
-                        full_name: "",
-                        phone: "",
-                        address: "",
-                        default_morning: true,
-                        default_evening: true,
-                        price_morning: 30,
-                        price_evening: 30,
-                        notes: "",
-                    }
-            )
+            setSubmitted(false)
+            form.reset(customer ? toFormValues(customer) : EMPTY_DEFAULTS)
         }
-    }, [open, customer, reset])
+    }, [open, customer])
 
-    async function handleFormSubmit(data: CreateCustomerInput) {
-        await onSubmit(data)
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setSubmitted(true)
+        form.handleSubmit()
     }
 
     return (
@@ -120,116 +103,222 @@ export default function CustomerForm({ open, customer, onClose, onSubmit, isLoad
 
                 <form
                     id="customer-form"
-                    onSubmit={handleSubmit(handleFormSubmit)}
+                    onSubmit={handleSubmit}
                     className="flex-1 px-6 py-4 space-y-5"
                 >
-                    {/* Basic Info */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="full_name">Full Name *</Label>
-                        <Input
-                            id="full_name"
-                            placeholder="Rajesh Kumar"
-                            {...register("full_name")}
-                            className={errors.full_name ? "border-danger" : ""}
-                        />
-                        {errors.full_name && (
-                            <p className="text-xs text-danger">{errors.full_name.message}</p>
+                    {/* Full Name */}
+                    <form.Field
+                        name="full_name"
+                        validators={{ onChange: zodField(createCustomerSchema.shape.full_name) }}
+                    >
+                        {(field) => (
+                            <div className="space-y-1.5">
+                                <Label htmlFor={field.name}>Full Name *</Label>
+                                <Input
+                                    id={field.name}
+                                    placeholder="Rajesh Kumar"
+                                    value={field.state.value}
+                                    onChange={(e) => field.handleChange(e.target.value)}
+                                    onBlur={field.handleBlur}
+                                    className={(field.state.meta.isTouched || submitted) && field.state.meta.errors.length ? "border-danger" : ""}
+                                />
+                                <FieldError errors={field.state.meta.errors} show={field.state.meta.isTouched || submitted} />
+                            </div>
                         )}
-                    </div>
+                    </form.Field>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="phone">Phone Number *</Label>
-                        <Input
-                            id="phone"
-                            placeholder="9876543210"
-                            type="tel"
-                            {...register("phone")}
-                            className={errors.phone ? "border-danger" : ""}
-                        />
-                        {errors.phone && (
-                            <p className="text-xs text-danger">{errors.phone.message}</p>
+                    {/* Phone */}
+                    <form.Field
+                        name="phone"
+                        validators={{ onChange: zodField(createCustomerSchema.shape.phone) }}
+                    >
+                        {(field) => (
+                            <div className="space-y-1.5">
+                                <Label htmlFor={field.name}>Phone Number *</Label>
+                                <Input
+                                    id={field.name}
+                                    placeholder="9876543210"
+                                    type="tel"
+                                    value={field.state.value}
+                                    onChange={(e) => field.handleChange(e.target.value)}
+                                    onBlur={field.handleBlur}
+                                    className={(field.state.meta.isTouched || submitted) && field.state.meta.errors.length ? "border-danger" : ""}
+                                />
+                                <FieldError errors={field.state.meta.errors} show={field.state.meta.isTouched || submitted} />
+                            </div>
                         )}
-                    </div>
+                    </form.Field>
 
-                    <div className="space-y-1.5">
-                        <Label htmlFor="address">Address</Label>
-                        <Input
-                            id="address"
-                            placeholder="123, Green Park, Delhi"
-                            {...register("address")}
-                        />
-                    </div>
+                    {/* Address */}
+                    <form.Field name="address">
+                        {(field) => (
+                            <div className="space-y-1.5">
+                                <Label htmlFor={field.name}>Address</Label>
+                                <Input
+                                    id={field.name}
+                                    placeholder="123, Green Park, Delhi"
+                                    value={field.state.value ?? ""}
+                                    onChange={(e) => field.handleChange(e.target.value)}
+                                    onBlur={field.handleBlur}
+                                />
+                            </div>
+                        )}
+                    </form.Field>
 
                     {/* Tiffin Defaults */}
-                    <div className="rounded-xl border border-border p-4 space-y-3">
+                    <div className="rounded-xl border border-border p-4 space-y-4">
                         <p className="text-sm font-semibold text-foreground">Tiffin Defaults</p>
 
-                        <Controller
-                            control={control}
-                            name="default_morning"
-                            render={({ field }) => (
-                                <ToggleField
-                                    label="Morning Tiffin"
-                                    checked={field.value}
-                                    onChange={field.onChange}
-                                />
-                            )}
-                        />
-
-                        <Controller
-                            control={control}
-                            name="default_evening"
-                            render={({ field }) => (
-                                <ToggleField
-                                    label="Evening Tiffin"
-                                    checked={field.value}
-                                    onChange={field.onChange}
-                                />
-                            )}
-                        />
-                    </div>
-
-                    {/* Pricing */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="price_morning">Morning Price (₹) *</Label>
-                            <Input
-                                id="price_morning"
-                                type="number"
-                                min={0}
-                                {...register("price_morning", { valueAsNumber: true })}
-                                className={errors.price_morning ? "border-danger" : ""}
-                            />
-                            {errors.price_morning && (
-                                <p className="text-xs text-danger">{errors.price_morning.message}</p>
-                            )}
+                        {/* Morning */}
+                        <div className="space-y-2">
+                            <form.Field name="tiffin_defaults.morning">
+                                {(field) => (
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="td_morning" className="cursor-pointer">Morning Tiffin</Label>
+                                        <Switch
+                                            id="td_morning"
+                                            checked={field.state.value}
+                                            onCheckedChange={field.handleChange}
+                                        />
+                                    </div>
+                                )}
+                            </form.Field>
+                            <div className="grid grid-cols-2 gap-3">
+                                <form.Field
+                                    name="tiffin_defaults.morning_qty"
+                                    validators={{ onChange: zodField(tiffinDefaultsSchema.shape.morning_qty) }}
+                                >
+                                    {(field) => (
+                                        <div className="space-y-1">
+                                            <Label htmlFor={field.name} className="text-xs text-muted">Qty / Day</Label>
+                                            <Input
+                                                id={field.name}
+                                                type="number"
+                                                min={1}
+                                                max={10}
+                                                value={field.state.value}
+                                                onChange={(e) => {
+                                                    const newQty = Math.max(1, parseInt(e.target.value) || 1)
+                                                    const oldQty = form.getFieldValue("tiffin_defaults.morning_qty")
+                                                    const oldPrice = form.getFieldValue("tiffin_defaults.morning_price")
+                                                    const unitPrice = oldQty > 0 ? oldPrice / oldQty : oldPrice
+                                                    field.handleChange(newQty)
+                                                    form.setFieldValue("tiffin_defaults.morning_price", Math.max(1, Math.round(newQty * unitPrice)))
+                                                }}
+                                                onBlur={field.handleBlur}
+                                            />
+                                            <FieldError errors={field.state.meta.errors} show={field.state.meta.isTouched || submitted} />
+                                        </div>
+                                    )}
+                                </form.Field>
+                                <form.Field
+                                    name="tiffin_defaults.morning_price"
+                                    validators={{ onChange: zodField(tiffinDefaultsSchema.shape.morning_price) }}
+                                >
+                                    {(field) => (
+                                        <div className="space-y-1">
+                                            <Label htmlFor={field.name} className="text-xs text-muted">Price (₹)</Label>
+                                            <Input
+                                                id={field.name}
+                                                type="number"
+                                                min={1}
+                                                value={field.state.value}
+                                                onChange={(e) => field.handleChange(Math.max(1, parseFloat(e.target.value) || 1))}
+                                                onBlur={field.handleBlur}
+                                                className={(field.state.meta.isTouched || submitted) && field.state.meta.errors.length ? "border-danger" : ""}
+                                            />
+                                            <FieldError errors={field.state.meta.errors} show={field.state.meta.isTouched || submitted} />
+                                        </div>
+                                    )}
+                                </form.Field>
+                            </div>
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="price_evening">Evening Price (₹) *</Label>
-                            <Input
-                                id="price_evening"
-                                type="number"
-                                min={0}
-                                {...register("price_evening", { valueAsNumber: true })}
-                                className={errors.price_evening ? "border-danger" : ""}
-                            />
-                            {errors.price_evening && (
-                                <p className="text-xs text-danger">{errors.price_evening.message}</p>
-                            )}
+
+                        <div className="border-t border-border/50" />
+
+                        {/* Evening */}
+                        <div className="space-y-2">
+                            <form.Field name="tiffin_defaults.evening">
+                                {(field) => (
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="td_evening" className="cursor-pointer">Evening Tiffin</Label>
+                                        <Switch
+                                            id="td_evening"
+                                            checked={field.state.value}
+                                            onCheckedChange={field.handleChange}
+                                        />
+                                    </div>
+                                )}
+                            </form.Field>
+                            <div className="grid grid-cols-2 gap-3">
+                                <form.Field
+                                    name="tiffin_defaults.evening_qty"
+                                    validators={{ onChange: zodField(tiffinDefaultsSchema.shape.evening_qty) }}
+                                >
+                                    {(field) => (
+                                        <div className="space-y-1">
+                                            <Label htmlFor={field.name} className="text-xs text-muted">Qty / Day</Label>
+                                            <Input
+                                                id={field.name}
+                                                type="number"
+                                                min={1}
+                                                max={10}
+                                                value={field.state.value}
+                                                onChange={(e) => {
+                                                    const newQty = Math.max(1, parseInt(e.target.value) || 1)
+                                                    const oldQty = form.getFieldValue("tiffin_defaults.evening_qty")
+                                                    const oldPrice = form.getFieldValue("tiffin_defaults.evening_price")
+                                                    const unitPrice = oldQty > 0 ? oldPrice / oldQty : oldPrice
+                                                    field.handleChange(newQty)
+                                                    form.setFieldValue("tiffin_defaults.evening_price", Math.max(1, Math.round(newQty * unitPrice)))
+                                                }}
+                                                onBlur={field.handleBlur}
+                                            />
+                                            <FieldError errors={field.state.meta.errors} show={field.state.meta.isTouched || submitted} />
+                                        </div>
+                                    )}
+                                </form.Field>
+                                <form.Field
+                                    name="tiffin_defaults.evening_price"
+                                    validators={{ onChange: zodField(tiffinDefaultsSchema.shape.evening_price) }}
+                                >
+                                    {(field) => (
+                                        <div className="space-y-1">
+                                            <Label htmlFor={field.name} className="text-xs text-muted">Price (₹)</Label>
+                                            <Input
+                                                id={field.name}
+                                                type="number"
+                                                min={1}
+                                                value={field.state.value}
+                                                onChange={(e) => field.handleChange(Math.max(1, parseFloat(e.target.value) || 1))}
+                                                onBlur={field.handleBlur}
+                                                className={(field.state.meta.isTouched || submitted) && field.state.meta.errors.length ? "border-danger" : ""}
+                                            />
+                                            <FieldError errors={field.state.meta.errors} show={field.state.meta.isTouched || submitted} />
+                                        </div>
+                                    )}
+                                </form.Field>
+                            </div>
                         </div>
                     </div>
 
                     {/* Notes */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="notes">Notes</Label>
-                        <textarea
-                            id="notes"
-                            rows={3}
-                            placeholder="Any special instructions..."
-                            {...register("notes")}
-                            className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm resize-none focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 placeholder:text-muted"
-                        />
-                    </div>
+                    <form.Field name="notes">
+                        {(field) => (
+                            <div className="space-y-1.5">
+                                <Label htmlFor={field.name}>Notes</Label>
+                                <Textarea
+                                    id={field.name}
+                                    rows={3}
+                                    placeholder="Any special instructions..."
+                                    value={field.state.value ?? ""}
+                                    onChange={(e) => field.handleChange(e.target.value)}
+                                    onBlur={field.handleBlur}
+                                    className="resize-none"
+                                />
+                            </div>
+                        )}
+                    </form.Field>
                 </form>
 
                 <SheetFooter>

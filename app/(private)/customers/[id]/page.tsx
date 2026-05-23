@@ -127,12 +127,28 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     <div className="grid md:grid-cols-2 gap-5">
                         {/* Tiffin settings */}
                         <div className="bg-card rounded-xl border border-border p-5">
-                            <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Tiffin Settings</p>
-                            <InfoRow label="Morning Tiffin" value={customer.default_morning ? "Enabled" : "Disabled"} valueClass={customer.default_morning ? "text-success" : "text-muted"} />
-                            <InfoRow label="Evening Tiffin" value={customer.default_evening ? "Enabled" : "Disabled"} valueClass={customer.default_evening ? "text-success" : "text-muted"} />
-                            <InfoRow label="Morning Price" value={`₹${customer.price_morning}`} />
-                            <InfoRow label="Evening Price" value={`₹${customer.price_evening}`} />
-                            <InfoRow label="Daily Total" value={`₹${customer.price_morning + customer.price_evening}`} />
+                            <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Tiffin Defaults</p>
+                            <InfoRow
+                                label="Morning"
+                                value={customer.tiffin_defaults.morning
+                                    ? `${customer.tiffin_defaults.morning_qty} × ₹${customer.tiffin_defaults.morning_price}`
+                                    : "Disabled"}
+                                valueClass={customer.tiffin_defaults.morning ? "text-success" : "text-muted"}
+                            />
+                            <InfoRow
+                                label="Evening"
+                                value={customer.tiffin_defaults.evening
+                                    ? `${customer.tiffin_defaults.evening_qty} × ₹${customer.tiffin_defaults.evening_price}`
+                                    : "Disabled"}
+                                valueClass={customer.tiffin_defaults.evening ? "text-success" : "text-muted"}
+                            />
+                            <InfoRow
+                                label="Daily Total"
+                                value={`₹${
+                                    (customer.tiffin_defaults.morning ? customer.tiffin_defaults.morning_qty * customer.tiffin_defaults.morning_price : 0) +
+                                    (customer.tiffin_defaults.evening ? customer.tiffin_defaults.evening_qty * customer.tiffin_defaults.evening_price : 0)
+                                }`}
+                            />
                         </div>
 
                         {/* Payment summary */}
