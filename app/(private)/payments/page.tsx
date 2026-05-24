@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Menu } from "lucide-react"
+import { format } from "date-fns"
+import { Plus, Menu, LayoutList, Table2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/AppShell"
@@ -9,6 +10,7 @@ import PaymentStats from "./components/PaymentStats"
 import PaymentTable from "./components/PaymentTable"
 import PaymentForm from "./components/PaymentForm"
 import PaymentDetailPanel from "./components/PaymentDetailPanel"
+import GroupedPaymentTable from "./components/GroupedPaymentTable"
 import {
     usePayments,
     useCreatePayment,
@@ -16,17 +18,49 @@ import {
     useDeletePayment,
 } from "@/hooks/usePayments"
 import type { Payment, PaymentQueryParams } from "@/types/payment.type"
+import type { GroupedPaymentQueryParams } from "@/types/grouped-payment.type"
 import type { CreatePaymentInput, UpdatePaymentInput } from "@/lib/validations/payment.validation"
+
+// ─── Default date range: 1st of current month → today ────────────────────────
+
+function getDefaultDateRange() {
+    const now = new Date()
+    const startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd")
+    const endDate = format(now, "yyyy-MM-dd")
+    return { startDate, endDate }
+}
+
+// ─── View mode toggle ─────────────────────────────────────────────────────────
+
+type ViewMode = "grouped" | "flat"
 
 export default function PaymentsPage() {
     const { toggle } = useSidebar()
+    const { startDate, endDate } = getDefaultDateRange()
 
-    const [params, setParams] = useState<PaymentQueryParams>({ page: 1, limit: 10 })
+    // ── View mode (grouped = default, flat = legacy table) ────────────────────
+    const [viewMode, setViewMode] = useState<ViewMode>("grouped")
+
+    // ── Grouped view state ────────────────────────────────────────────────────
+    const [groupedParams, setGroupedParams] = useState<GroupedPaymentQueryParams>({
+        startDate,
+        endDate,
+        page: 1,
+        limit: 20,
+    })
+
+    // ── Flat view state (existing) ────────────────────────────────────────────
+    const [flatParams, setFlatParams] = useState<PaymentQueryParams>({
+        page: 1,
+        limit: 10,
+        start_date: startDate,
+        end_date: endDate,
+    })
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
     const [editingPayment, setEditingPayment] = useState<Payment | null>(null)
     const [showForm, setShowForm] = useState(false)
 
-    const { data, isLoading } = usePayments(params)
+    const { data, isLoading } = usePayments(flatParams)
     const createMutation = useCreatePayment()
     const updateMutation = useUpdatePayment()
     const deleteMutation = useDeletePayment()
@@ -57,9 +91,7 @@ export default function PaymentsPage() {
                 }
                 await updateMutation.mutateAsync({ id: editingPayment._id, data: updateData })
                 toast.success("Payment updated successfully")
-                if (selectedPayment?._id === editingPayment._id) {
-                    setSelectedPayment(null)
-                }
+                if (selectedPayment?._id === editingPayment._id) setSelectedPayment(null)
             } else {
                 await createMutation.mutateAsync(formData)
                 toast.success("Payment recorded successfully")
@@ -86,7 +118,7 @@ export default function PaymentsPage() {
 
     return (
         <div className="flex flex-col flex-1 overflow-hidden">
-            {/* Page Header */}
+            {/* ── Page Header ──────────────────────────────────────────────────── */}
             <header className="flex items-center justify-between px-4 py-4 bg-background border-b border-border shrink-0">
                 <div className="flex items-center gap-3">
                     <button
@@ -99,37 +131,77 @@ export default function PaymentsPage() {
                     <div>
                         <h1 className="text-xl font-semibold text-foreground">Payments</h1>
                         <p className="text-sm text-muted mt-0.5">
-                            Track collections, pending balances and billing
+                            Live collection status synced with daily tiffin entries
                         </p>
                     </div>
                 </div>
 
-                <Button onClick={() => setShowForm(true)} className="gap-1.5">
-                    <Plus className="w-4 h-4" />
-                    Record Payment
-                </Button>
+                <div className="flex items-center gap-2">
+                    {/* View mode toggle */}
+                    <div className="flex items-center rounded-lg border border-border overflow-hidden">
+                        <button
+                            onClick={() => setViewMode("grouped")}
+                            title="Grouped by customer"
+                            className={`p-2 transition-colors ${
+                                viewMode === "grouped"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted hover:bg-muted/10"
+                            }`}
+                        >
+                            <LayoutList className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setViewMode("flat")}
+                            title="All payments list"
+                            className={`p-2 transition-colors ${
+                                viewMode === "flat"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted hover:bg-muted/10"
+                            }`}
+                        >
+                            <Table2 className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <Button onClick={() => setShowForm(true)} className="gap-1.5">
+                        <Plus className="w-4 h-4" />
+                        Record Payment
+                    </Button>
+                </div>
             </header>
 
-            {/* Content */}
+            {/* ── Content ──────────────────────────────────────────────────────── */}
             <div className="flex flex-1 overflow-hidden">
-                {/* Main content */}
                 <div className="flex-1 overflow-auto p-6 space-y-5">
+                    {/* Stats always visible */}
                     <PaymentStats />
-                    <PaymentTable
-                        payments={payments}
-                        isLoading={isLoading}
-                        meta={meta}
-                        params={params}
-                        onParamsChange={setParams}
-                        onView={setSelectedPayment}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        selectedId={selectedPayment?._id}
-                    />
+
+                    {/* Grouped view (default) */}
+                    {viewMode === "grouped" && (
+                        <GroupedPaymentTable
+                            params={groupedParams}
+                            onParamsChange={setGroupedParams}
+                        />
+                    )}
+
+                    {/* Flat payment list (legacy) */}
+                    {viewMode === "flat" && (
+                        <PaymentTable
+                            payments={payments}
+                            isLoading={isLoading}
+                            meta={meta}
+                            params={flatParams}
+                            onParamsChange={setFlatParams}
+                            onView={setSelectedPayment}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            selectedId={selectedPayment?._id}
+                        />
+                    )}
                 </div>
 
-                {/* Detail panel */}
-                {selectedPayment && (
+                {/* Detail panel (flat view only) */}
+                {viewMode === "flat" && selectedPayment && (
                     <PaymentDetailPanel
                         payment={selectedPayment}
                         onClose={() => setSelectedPayment(null)}
@@ -138,7 +210,7 @@ export default function PaymentsPage() {
                 )}
             </div>
 
-            {/* Add / Edit form */}
+            {/* Record / Edit payment form */}
             <PaymentForm
                 open={showForm}
                 payment={editingPayment}
