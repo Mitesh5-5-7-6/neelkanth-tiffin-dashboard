@@ -2,13 +2,27 @@
 
 import { use } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Phone, MapPin, Calendar, Pencil } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { useCustomer } from "@/hooks/useCustomers"
+import { useCustomerPaymentSummary } from "@/hooks/usePayments"
 import { cn } from "@/lib/utils"
+
+function formatINR(n: number) {
+    return `₹${n.toLocaleString("en-IN")}`
+}
+
+function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    })
+}
 
 const avatarColors = ["bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger"]
 
@@ -31,8 +45,18 @@ function InfoRow({ label, value, valueClass }: { label: string; value: string; v
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params)
+    const router = useRouter()
     const { data, isLoading, isError } = useCustomer(id)
     const customer = data?.data
+    const { data: summaryData, isLoading: summaryLoading } = useCustomerPaymentSummary(id)
+    const summary = summaryData?.data
+    const lastPayment = summary?.payments?.[0]
+
+    function goToPayments(opts: { newPayment?: boolean } = {}) {
+        const sp = new URLSearchParams({ customer_id: id })
+        if (opts.newPayment) sp.set("new", "1")
+        router.push(`/payments?${sp.toString()}`)
+    }
 
     if (isLoading) {
         return (
@@ -154,11 +178,45 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                         {/* Payment summary */}
                         <div className="bg-card rounded-xl border border-border p-5">
                             <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Payment Summary</p>
-                            <InfoRow label="Total Paid" value="₹0" valueClass="text-success" />
-                            <InfoRow label="Total Pending" value="₹0" valueClass="text-danger" />
-                            <InfoRow label="Last Payment" value="—" />
+                            {summaryLoading ? (
+                                <div className="space-y-2.5 py-2">
+                                    <Skeleton className="h-4 w-full" />
+                                    <Skeleton className="h-4 w-full" />
+                                    <Skeleton className="h-4 w-2/3" />
+                                </div>
+                            ) : (
+                                <>
+                                    <InfoRow
+                                        label="Total Paid"
+                                        value={formatINR(summary?.total_paid ?? 0)}
+                                        valueClass="text-success"
+                                    />
+                                    <InfoRow
+                                        label="Total Pending"
+                                        value={formatINR(summary?.outstanding ?? 0)}
+                                        valueClass={summary && summary.outstanding > 0 ? "text-danger" : "text-muted"}
+                                    />
+                                    {summary && summary.advance_balance > 0 && (
+                                        <InfoRow
+                                            label="Advance Balance"
+                                            value={formatINR(summary.advance_balance)}
+                                            valueClass="text-primary"
+                                        />
+                                    )}
+                                    <InfoRow
+                                        label="Last Payment"
+                                        value={
+                                            lastPayment
+                                                ? `${formatINR(lastPayment.paid_amount)} · ${formatDate(lastPayment.payment_date)}`
+                                                : "—"
+                                        }
+                                    />
+                                </>
+                            )}
                             <Separator className="my-3" />
-                            <Button className="w-full">Add Payment</Button>
+                            <Button className="w-full" onClick={() => goToPayments({ newPayment: true })}>
+                                Add Payment
+                            </Button>
                         </div>
                     </div>
 

@@ -96,6 +96,14 @@ export interface CustomerPaymentSummary {
     payments: Payment[]
 }
 
+export interface CustomerPaymentSummaryLite {
+    customer_id: string
+    total_bill: number
+    total_paid: number
+    outstanding: number
+    advance_balance: number
+}
+
 export interface GenerateBillResult {
     customer_id: string
     customer_name: string

@@ -16,9 +16,9 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     if (!pathname.startsWith('/api/')) {
-        const response = NextResponse.next()
-        response.headers.set('x-pathname', pathname)
-        return response
+        const requestHeaders = new Headers(request.headers)
+        requestHeaders.set('x-pathname', pathname)
+        return NextResponse.next({ request: { headers: requestHeaders } })
     }
     if (pathname.startsWith('/api/auth')) return NextResponse.next()
 
