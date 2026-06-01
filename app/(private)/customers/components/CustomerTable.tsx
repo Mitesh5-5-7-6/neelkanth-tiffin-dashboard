@@ -21,6 +21,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogFooter,
     DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
+import { useCustomersPaymentSummary } from "@/hooks/usePayments"
 import type { Customer, CustomerQueryParams } from "@/types/customer.type"
 import type { PaginationMeta } from "@/types/common.types"
 import { cn } from "@/lib/utils"
@@ -62,6 +63,14 @@ export default function CustomerTable({
 }: CustomerTableProps) {
     const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null)
     const [sorting, setSorting] = useState<SortingState>([{ id: "full_name", desc: false }])
+
+    const customerIds = useMemo(() => customers.map((c) => c._id), [customers])
+    const { data: summaryData } = useCustomersPaymentSummary(customerIds)
+    const outstandingMap = useMemo(() => {
+        const map = new Map<string, number>()
+        summaryData?.data?.forEach((s) => map.set(s.customer_id, s.outstanding))
+        return map
+    }, [summaryData])
 
     function handleSearch(value: string) {
         onParamsChange({ ...params, search: value, page: 1 })
@@ -171,7 +180,26 @@ export default function CustomerTable({
         colHelper.display({
             id: "outstanding",
             header: () => <span className="flex justify-end">Outstanding</span>,
-            cell: () => <span className="text-danger font-medium flex justify-end">₹0</span>,
+            cell: ({ row }) => {
+                const out = outstandingMap.get(row.original._id)
+                if (out === undefined) {
+                    return (
+                        <span className="flex justify-end">
+                            <Skeleton className="h-4 w-12" />
+                        </span>
+                    )
+                }
+                return (
+                    <span
+                        className={cn(
+                            "font-medium flex justify-end tabular-nums",
+                            out > 0 ? "text-danger" : "text-muted"
+                        )}
+                    >
+                        ₹{out.toLocaleString("en-IN")}
+                    </span>
+                )
+            },
         }),
         colHelper.display({
             id: "actions",

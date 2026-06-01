@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
                 },
             ]),
             // All payments for periods that ended before this billing period starts
+            // Group first by billing period to avoid double-counting total_bill_amount
             Payment.aggregate([
                 {
                     $match: {
@@ -62,9 +63,16 @@ export async function POST(request: NextRequest) {
                 },
                 {
                     $group: {
+                        _id: { start: '$billing_start_date', end: '$billing_end_date' },
+                        billed_for_period: { $max: '$total_bill_amount' },
+                        paid_for_period: { $sum: '$paid_amount' },
+                    },
+                },
+                {
+                    $group: {
                         _id: null,
-                        total_billed: { $sum: '$total_bill_amount' },
-                        total_paid: { $sum: '$paid_amount' },
+                        total_billed: { $sum: '$billed_for_period' },
+                        total_paid: { $sum: '$paid_for_period' },
                     },
                 },
             ]),

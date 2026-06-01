@@ -173,9 +173,54 @@
     -moz-appearance: textfield;
     appearance: textfield;
   }
+
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
 }
+
+/* ---------- Invoice PDF / Print Styles (A4) ---------- */
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+    background: white !important;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Keep the invoice card on a single page */
+  .invoice-root {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Ensure shadows and gradients print */
+  .print-preserve-bg {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Avoid any accidental overflow */
+  .no-page-break {
+    page-break-inside: avoid;
+  }
+
+  /* Small tweaks for print font sizes */
+  .invoice-table th,
+  .invoice-table td {
+    font-size: 11px;
+  }
+}
+
+/* End Invoice PDF / Print Styles */

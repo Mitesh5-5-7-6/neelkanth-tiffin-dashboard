@@ -8,13 +8,19 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
-import { useTiffinPreview, useBulkSaveTiffin } from "@/hooks/useTiffin"
-import type { BulkPreviewRow } from "@/types/tiffin.type"
+import { useTiffinPreview, useBulkSaveTiffinEntries } from "@/hooks/useTiffinEntries"
+import type { TiffinPreviewRow } from "@/types/tiffin.type"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface BulkRow extends BulkPreviewRow {
+type BulkRow = TiffinPreviewRow & {
+    morning_qty: number
+    evening_qty: number
+    morning_price: number
+    evening_price: number
+    morning_paid: boolean
+    evening_paid: boolean
     total: number
     changed: boolean
 }
@@ -58,12 +64,36 @@ function dateLabel(iso: string) {
 
 // ─── Row helpers ──────────────────────────────────────────────────────────────
 
-function calcTotal(row: Pick<BulkRow, "morning" | "evening" | "price">) {
-    return ((row.morning ? 1 : 0) + (row.evening ? 1 : 0)) * row.price
+function calcTotal(row: Partial<BulkRow>) {
+    const mq = row.morning ? (row.morning_qty ?? 0) : 0
+    const eq = row.evening ? (row.evening_qty ?? 0) : 0
+    const mp = row.morning_price ?? (row as any).price ?? 0
+    const ep = row.evening_price ?? (row as any).price ?? mp
+    return mq * mp + eq * ep
 }
 
-function buildRows(previewRows: BulkPreviewRow[]): BulkRow[] {
-    return previewRows.map((r) => ({ ...r, total: calcTotal(r), changed: false }))
+function buildRows(previewRows: TiffinPreviewRow[]): BulkRow[] {
+    return previewRows.map((r) => {
+        const morning_qty = typeof r.morning_qty === "number" ? r.morning_qty : r.morning ? 1 : 0
+        const evening_qty = typeof r.evening_qty === "number" ? r.evening_qty : r.evening ? 1 : 0
+        const morning_price = (r as any).morning_price ?? (r as any).price ?? 0
+        const evening_price = (r as any).evening_price ?? (r as any).price ?? morning_price
+        const morning_paid = (r as any).morning_paid ?? false
+        const evening_paid = (r as any).evening_paid ?? false
+        const row: BulkRow = {
+            ...r,
+            morning_qty,
+            evening_qty,
+            morning_price,
+            evening_price,
+            morning_paid,
+            evening_paid,
+            total: 0,
+            changed: false,
+        }
+        row.total = calcTotal(row)
+        return row
+    })
 }
 
 const AVATAR_COLORS = ["bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger"]
@@ -79,8 +109,8 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
 
     const tableScrollRef = useRef<HTMLDivElement>(null)
 
-    const { data: previewData, isLoading: previewLoading } = useTiffinPreview(open ? fromDate : null)
-    const saveMutation = useBulkSaveTiffin()
+    const { data: previewData, isLoading: previewLoading } = useTiffinPreview(open ? toDate : null, open ? fromDate : null)
+    const saveMutation = useBulkSaveTiffinEntries()
 
     useEffect(() => {
         if (previewData?.data) {
@@ -102,7 +132,22 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
         (realIdx: number, field: "morning" | "evening" | "price", value: boolean | number) => {
             setRows((prev) => {
                 const next = [...prev]
-                const row = { ...next[realIdx], [field]: value }
+                const row = { ...next[realIdx] } as unknown as BulkRow
+                if (field === "price") {
+                    const v = Number(value) || 0
+                    row.morning_price = v
+                    row.evening_price = v
+                } else if (field === "morning") {
+                    const b = !!value
+                    row.morning = b
+                    if (!b) row.morning_qty = 0
+                    else if (!row.morning_qty) row.morning_qty = 1
+                } else if (field === "evening") {
+                    const b = !!value
+                    row.evening = b
+                    if (!b) row.evening_qty = 0
+                    else if (!row.evening_qty) row.evening_qty = 1
+                }
                 row.total = calcTotal(row)
                 row.changed = true
                 next[realIdx] = row
@@ -175,12 +220,14 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                 entry_date: toDate,
                 entries: rows.map((r) => ({
                     customer_id: r.customer_id,
-                    morning_qty: r.morning ? (r.morning_qty || 1) : 0,
-                    morning_price: r.price,
-                    morning_paid: r.morning_paid,
-                    evening_qty: r.evening ? (r.evening_qty || 1) : 0,
-                    evening_price: r.price,
-                    evening_paid: r.evening_paid,
+                    morning_qty: r.morning ? (r.morning_qty ?? 0) : 0,
+                    morning_price: r.morning_price ?? (r as any).price ?? 0,
+                    morning_paid: r.morning_paid ?? false,
+                    evening_qty: r.evening ? (r.evening_qty ?? 0) : 0,
+                    evening_price: r.evening_price ?? (r as any).price ?? (r.morning_price ?? 0),
+                    evening_paid: r.evening_paid ?? false,
+                    is_manual_price: (r as any).is_manual_price ?? false,
+                    notes: (r as any).notes,
                 })),
             })
             toast.success(`Saved tiffin data for ${rows.length} customers on ${displayDate(toDate)}`)
@@ -371,7 +418,7 @@ export default function BulkCopyModal({ open, fromDate, toDate, onClose }: BulkC
                                                     type="number"
                                                     min={0}
                                                     max={10000}
-                                                    value={row.price}
+                                                    value={row.morning_price ?? row.evening_price ?? (row as any).price ?? 0}
                                                     onChange={(e) => {
                                                         const v = parseFloat(e.target.value)
                                                         if (!isNaN(v) && v >= 0) updateRow(ri, "price", v)

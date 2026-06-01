@@ -9,7 +9,12 @@ interface RateLimitRecord {
     resetAt: number
 }
 
-const store = new Map<string, RateLimitRecord>()
+// Keep the in-memory store on `globalThis` so it survives HMR during development.
+// This is still not suitable for multi-instance production — replace with
+// an Upstash/Redis-backed sliding window implementation (see ARCHITECTURE.md).
+const g = globalThis as typeof globalThis & { __ntRateLimitStore?: Map<string, RateLimitRecord> }
+if (!('__ntRateLimitStore' in g)) g.__ntRateLimitStore = new Map<string, RateLimitRecord>()
+const store = g.__ntRateLimitStore as Map<string, RateLimitRecord>
 
 export type RateLimitResult =
     | { allowed: true }
