@@ -9,7 +9,7 @@ import {
     createColumnHelper,
     type SortingState,
 } from "@tanstack/react-table"
-import { Eye, Pencil, Trash2, Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Eye, Pencil, Trash2, Printer, Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { format } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -117,6 +117,7 @@ export default function PaymentTable({
 }: PaymentTableProps) {
     const [deleteTarget, setDeleteTarget] = useState<Payment | null>(null)
     const [sorting, setSorting] = useState<SortingState>([{ id: "payment_date", desc: true }])
+    const [downloadingFor, setDownloadingFor] = useState<string | null>(null)
 
     function handleSearch(value: string) {
         onParamsChange({ ...params, search: value, page: 1 })
@@ -242,6 +243,46 @@ export default function PaymentTable({
                         className="flex items-center justify-center gap-1"
                         onClick={(e) => e.stopPropagation()}
                     >
+                        <button
+                            onClick={async () => {
+                                const customer = p.customer
+                                if (!customer) return
+                                const customerId = customer._id
+                                try {
+                                    setDownloadingFor(customerId)
+                                    const start = params.start_date ?? p.billing_start_date ?? ''
+                                    const end = params.end_date ?? p.billing_end_date ?? ''
+                                    const name = customer.full_name ?? ''
+                                    const qs = new URLSearchParams()
+                                    qs.set('customerId', customerId)
+                                    if (start) qs.set('start_date', start)
+                                    if (end) qs.set('end_date', end)
+                                    if (name) qs.set('name', name)
+
+                                    const res = await fetch(`/api/invoice/generate?${qs.toString()}`)
+                                    if (!res.ok) throw new Error('Failed to generate PDF')
+                                    const blob = await res.blob()
+                                    const url = URL.createObjectURL(blob)
+                                    const a = document.createElement('a')
+                                    a.href = url
+                                    a.download = `invoice-${customerId}.pdf`
+                                    document.body.appendChild(a)
+                                    a.click()
+                                    a.remove()
+                                    URL.revokeObjectURL(url)
+                                } catch (err) {
+                                    console.error(err)
+                                    alert('Failed to download invoice PDF')
+                                } finally {
+                                    setDownloadingFor(null)
+                                }
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
+                            title="Download invoice PDF"
+                            disabled={!!downloadingFor}
+                        >
+                            <Printer className="w-4 h-4" />
+                        </button>
                         <button
                             onClick={() => onView(p)}
                             className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"

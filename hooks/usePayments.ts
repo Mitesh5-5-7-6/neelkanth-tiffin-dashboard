@@ -6,6 +6,7 @@ import type {
     PaymentStats,
     PaymentQueryParams,
     CustomerPaymentSummary,
+    CustomerPaymentSummaryLite,
     GenerateBillResult,
     MonthlyReport,
 } from "@/types/payment.type"
@@ -18,6 +19,7 @@ type PaymentListResponse = ApiSuccess<Payment[]> & { meta: PaginationMeta }
 type PaymentResponse = ApiSuccess<Payment>
 type StatsResponse = ApiSuccess<PaymentStats>
 type SummaryResponse = ApiSuccess<CustomerPaymentSummary>
+type BatchSummaryResponse = ApiSuccess<CustomerPaymentSummaryLite[]>
 type BillResponse = ApiSuccess<GenerateBillResult>
 type ReportResponse = ApiSuccess<MonthlyReport>
 
@@ -72,6 +74,19 @@ export function useCustomerPaymentSummary(customerId: string) {
         queryKey: ["payments", "customer-summary", customerId],
         queryFn: () => apiFetch<SummaryResponse>(`/api/payments/customer-summary/${customerId}`),
         enabled: !!customerId,
+    })
+}
+
+export function useCustomersPaymentSummary(customerIds: string[]) {
+    const sortedKey = [...customerIds].sort().join(",")
+    return useQuery<BatchSummaryResponse>({
+        queryKey: ["payments", "customers-summary", sortedKey],
+        queryFn: () =>
+            apiFetch<BatchSummaryResponse>(
+                `/api/payments/customers-summary?ids=${encodeURIComponent(customerIds.join(","))}`
+            ),
+        enabled: customerIds.length > 0,
+        staleTime: 30_000,
     })
 }
 

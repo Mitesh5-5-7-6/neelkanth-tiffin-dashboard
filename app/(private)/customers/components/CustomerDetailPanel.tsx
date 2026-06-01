@@ -1,10 +1,25 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { X, Phone, MapPin, Calendar, IndianRupee, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
+import { useCustomerPaymentSummary } from "@/hooks/usePayments"
 import type { Customer } from "@/types/customer.type"
 import { cn } from "@/lib/utils"
+
+function formatINR(n: number) {
+    return `₹${n.toLocaleString("en-IN")}`
+}
+
+function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    })
+}
 
 interface CustomerDetailPanelProps {
     customer: Customer
@@ -37,11 +52,22 @@ function DetailRow({ label, value, valueClass }: { label: string; value: string;
 }
 
 export default function CustomerDetailPanel({ customer, onClose, onEdit }: CustomerDetailPanelProps) {
+    const router = useRouter()
+    const { data: summaryData, isLoading: summaryLoading } = useCustomerPaymentSummary(customer._id)
+    const summary = summaryData?.data
+    const lastPayment = summary?.payments?.[0]
+
     const joinedDate = new Date(customer.createdAt).toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
         year: "numeric",
     })
+
+    function goToPayments(opts: { newPayment?: boolean } = {}) {
+        const params = new URLSearchParams({ customer_id: customer._id })
+        if (opts.newPayment) params.set("new", "1")
+        router.push(`/payments?${params.toString()}`)
+    }
 
     return (
         <div className="w-80 shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
@@ -116,10 +142,45 @@ export default function CustomerDetailPanel({ customer, onClose, onEdit }: Custo
                 {/* Payment Summary */}
                 <div className="px-5 py-4">
                     <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Payment Summary</p>
-                    <DetailRow label="Total Paid" value="₹0" valueClass="text-success" />
-                    <DetailRow label="Total Pending" value="₹0" valueClass="text-danger" />
-                    <DetailRow label="Last Payment" value="—" />
-                    <button className="mt-2 flex items-center gap-1.5 text-sm text-primary hover:underline">
+                    {summaryLoading ? (
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-2/3" />
+                        </div>
+                    ) : (
+                        <>
+                            <DetailRow
+                                label="Total Paid"
+                                value={formatINR(summary?.total_paid ?? 0)}
+                                valueClass="text-success"
+                            />
+                            <DetailRow
+                                label="Total Pending"
+                                value={formatINR(summary?.outstanding ?? 0)}
+                                valueClass={summary && summary.outstanding > 0 ? "text-danger" : "text-muted"}
+                            />
+                            {summary && summary.advance_balance > 0 && (
+                                <DetailRow
+                                    label="Advance Balance"
+                                    value={formatINR(summary.advance_balance)}
+                                    valueClass="text-primary"
+                                />
+                            )}
+                            <DetailRow
+                                label="Last Payment"
+                                value={
+                                    lastPayment
+                                        ? `${formatINR(lastPayment.paid_amount)} · ${formatDate(lastPayment.payment_date)}`
+                                        : "—"
+                                }
+                            />
+                        </>
+                    )}
+                    <button
+                        onClick={() => goToPayments()}
+                        className="mt-2 flex items-center gap-1.5 text-sm text-primary hover:underline"
+                    >
                         <IndianRupee className="w-3.5 h-3.5" />
                         View Payment History
                     </button>
@@ -155,7 +216,7 @@ export default function CustomerDetailPanel({ customer, onClose, onEdit }: Custo
                 <Button variant="outline" className="flex-1" onClick={onEdit}>
                     Edit Customer
                 </Button>
-                <Button className="flex-1">
+                <Button className="flex-1" onClick={() => goToPayments({ newPayment: true })}>
                     Add Payment
                 </Button>
             </div>
