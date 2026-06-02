@@ -22,7 +22,6 @@ export default async function Page({ searchParams }: Props) {
         <html>
             <body className="bg-gray-50 p-6">
                 <main className="mx-auto max-w-[190mm]">
-                    {/* @ts-expect-error Server component */}
                     <InvoiceDocument data={data} />
                 </main>
             </body>

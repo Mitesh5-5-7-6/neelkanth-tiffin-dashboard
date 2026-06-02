@@ -1,14 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import generatePdf from '@/lib/pdf/generatePdf';
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-    const id = params.id;
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(_req: NextRequest, { params }: RouteContext) {
+    const { id } = await params;
     const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
     const url = `${baseUrl}/invoice/${id}/print`;
 
     try {
         const pdfBuffer = await generatePdf(url);
-        return new Response(pdfBuffer, {
+        return new Response(Buffer.from(pdfBuffer), {
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',

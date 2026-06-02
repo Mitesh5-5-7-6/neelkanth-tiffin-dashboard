@@ -1,6 +1,7 @@
+import { NextRequest } from 'next/server';
 import generatePdf from '@/lib/pdf/generatePdf'
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
     try {
         const urlObj = new URL(req.url)
         const sp = urlObj.searchParams
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
 
         const pdfBuffer = await generatePdf(pageUrl)
 
-        return new Response(pdfBuffer, {
+        return new Response(Buffer.from(pdfBuffer), {
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',
