@@ -1,7 +1,7 @@
-import puppeteer from 'puppeteer';
+import puppeteer, { type Browser } from 'puppeteer';
 
 export default async function generatePdf(url: string) {
-    let browser: puppeteer.Browser | null = null;
+    let browser: Browser | null = null;
     try {
         browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
         const page = await browser.newPage();
