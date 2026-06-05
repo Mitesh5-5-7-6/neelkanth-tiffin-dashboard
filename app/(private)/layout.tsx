@@ -1,3 +1,4 @@
+'use client';
 import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
