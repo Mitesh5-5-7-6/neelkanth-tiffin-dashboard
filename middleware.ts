@@ -22,6 +22,11 @@ export async function middleware(request: NextRequest) {
     }
     if (pathname.startsWith('/api/auth')) return NextResponse.next()
 
+    // Mobile auth endpoints (login/refresh/logout/me) are public: they are the
+    // login surface and authenticate via their own Bearer/JWT layer, not the
+    // NextAuth session this middleware checks. The handlers do their own auth.
+    if (pathname.startsWith('/api/nts/v1/auth')) return NextResponse.next()
+
     const ip = getClientIp(request)
     const isMutating = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method)
     const isBulk = pathname.includes('/bulk')

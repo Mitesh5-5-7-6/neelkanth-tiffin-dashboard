@@ -1,13 +1,8 @@
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { createHash, timingSafeEqual, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import { registerSession, isActiveSession } from '@/lib/session-store';
+import { validateCredentials } from '@/lib/auth/validateCredentials';
 import type { NextAuthOptions } from 'next-auth';
-
-function safeCompare(a: string, b: string): boolean {
-    const hashA = createHash('sha256').update(a).digest();
-    const hashB = createHash('sha256').update(b).digest();
-    return timingSafeEqual(hashA, hashB);
-}
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -18,20 +13,14 @@ export const authOptions: NextAuthOptions = {
                 password: { label: 'Password', type: 'password' },
             },
             async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
-
-                const validEmail = process.env.LOGIN_EMAIL;
-                const validPassword = process.env.LOGIN_PASSWORD;
-                if (!validEmail || !validPassword) return null;
-
-                const emailOk = safeCompare(credentials.email, validEmail);
-                const passwordOk = safeCompare(credentials.password, validPassword);
-                if (!emailOk || !passwordOk) return null;
+                // Shared single source of truth — same validation as the mobile API.
+                const user = validateCredentials(credentials?.email, credentials?.password);
+                if (!user) return null;
 
                 const sessionId = randomUUID();
                 registerSession(sessionId);
 
-                return { id: 'admin', email: validEmail, name: 'Admin', role: 'admin', sessionId } as never;
+                return { id: 'admin', email: user.email, name: 'Admin', role: 'admin', sessionId } as never;
             },
         }),
     ],
