@@ -10,17 +10,18 @@ export function validateImportRows(
     const issues: ImportValidationIssue[] = [...workbook.issues, ...customerIssues]
 
     const normalizedRows = matchedRows.map((row) => ({ ...row }))
+    const dateCounts = new Map<string, number>()
 
-    // Determine duplicate dates based on workbook rows (i.e. repeated date rows in the sheet),
-    // not by counting preview rows (which repeat per customer). This prevents every date
-    // from being marked as duplicate when there are multiple customer columns.
-    const rowDateCounts = new Map<string, number>()
-    for (const r of workbook.rows) {
-        if (!r.date) continue
-        rowDateCounts.set(r.date, (rowDateCounts.get(r.date) ?? 0) + 1)
+    for (const workbookRow of workbook.rows) {
+        if (!workbookRow.date) continue
+        dateCounts.set(workbookRow.date, (dateCounts.get(workbookRow.date) ?? 0) + 1)
     }
 
-    const duplicateDates = new Set(Array.from(rowDateCounts.entries()).filter(([, count]) => count > 1).map(([date]) => date))
+    const duplicateDates = new Set(
+        Array.from(dateCounts.entries())
+            .filter(([, count]) => count > 1)
+            .map(([date]) => date),
+    )
 
     const validatedRows: ImportPreviewRow[] = normalizedRows.map((row) => {
         const customer = customers.find((entry) => entry._id === row.customerId)
@@ -47,8 +48,15 @@ export function validateImportRows(
             const defaults = customer.tiffin_defaults
             const morningEnabled = defaults?.morning ?? true
             const eveningEnabled = defaults?.evening ?? false
-            const morningQty = row.morningQty > 0 ? row.morningQty : 0
-            const eveningQty = row.eveningQty > 0 ? row.eveningQty : 0
+            let morningQty = row.morningQty > 0 ? row.morningQty : 0
+            let eveningQty = row.eveningQty > 0 ? row.eveningQty : 0
+
+            if (morningQty > 0 && eveningQty === 0) {
+                if (!morningEnabled && eveningEnabled) {
+                    eveningQty = morningQty
+                    morningQty = 0
+                }
+            }
 
             const morningPrice = morningQty > 0 ? defaults?.morning_price ?? 0 : 0
             const eveningPrice = eveningQty > 0 ? defaults?.evening_price ?? 0 : 0
