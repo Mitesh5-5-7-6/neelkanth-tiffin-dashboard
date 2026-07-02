@@ -6,7 +6,7 @@ export const bulkEntryInputSchema = z.object({
         .number({ message: 'Morning quantity is required' })
         .int()
         .min(0, 'Quantity cannot be negative')
-        .max(10, 'Quantity too high'),
+        .max(50, 'Quantity too high'),
     morning_price: z
         .number({ message: 'Morning price is required' })
         .min(0, 'Price cannot be negative')
@@ -15,7 +15,7 @@ export const bulkEntryInputSchema = z.object({
         .number({ message: 'Evening quantity is required' })
         .int()
         .min(0, 'Quantity cannot be negative')
-        .max(10, 'Quantity too high'),
+        .max(50, 'Quantity too high'),
     evening_price: z
         .number({ message: 'Evening price is required' })
         .min(0, 'Price cannot be negative')
