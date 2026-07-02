@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { motion } from "framer-motion"
 import {
@@ -22,8 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSidebar } from "@/components/AppShell"
 import { useDashboardStats, useMonthSummary } from "@/hooks/useDashboard"
-import { DashboardFilterProvider, useDashboardFilter } from "@/hooks/dashboard/use-date-filter"
-import DashboardFilter from "@/components/dashboard/DashboardFilter"
+import { DashboardRangeProvider } from "@/hooks/dashboard/use-dashboard-range"
 import StatCardSkeleton from "@/components/ui/skeletons/StatCardSkeleton"
 import EmptyState from "@/components/dashboard/EmptyState"
 import RecentTiffinTable from "@/components/dashboard/tables/RecentTiffinTable"
@@ -155,18 +154,25 @@ function PageSkeleton() {
 
 // ─── Main content (needs filter context) ──────────────────────────────────────
 
-function DashboardContent() {
+function DashboardContent({
+    selectedMonth,
+    selectedYear,
+    setSelectedMonth,
+    setSelectedYear,
+    periodLabel,
+}: {
+    selectedMonth: number
+    selectedYear: number
+    setSelectedMonth: React.Dispatch<React.SetStateAction<number>>
+    setSelectedYear: React.Dispatch<React.SetStateAction<number>>
+    periodLabel: string
+}) {
     const { toggle } = useSidebar()
     const { data: stats, isLoading, isError } = useDashboardStats()
-    const now = new Date()
-    const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonthDate.getMonth() + 1)
-    const [selectedYear, setSelectedYear] = useState<number>(defaultMonthDate.getFullYear())
-
     const { data: month, isLoading: monthLoading, isError: monthError } = useMonthSummary(selectedMonth, selectedYear)
-    const { label: periodLabel } = useDashboardFilter()
 
     const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`
+    const now = new Date()
 
     const today = new Date().toLocaleDateString("en-IN", {
         weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -175,47 +181,94 @@ function DashboardContent() {
     return (
         <div className="flex flex-col flex-1 overflow-hidden">
             {/* Header */}
-            <header className="flex items-center justify-between px-4 py-4 bg-card border-b border-border shrink-0 gap-4">
-                <div className="flex items-center gap-3 shrink-0">
-                    <button
-                        onClick={toggle}
-                        title="Toggle sidebar"
-                        className="p-1.5 rounded-lg hover:bg-muted/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                    >
-                        <Menu className="w-5 h-5" />
-                    </button>
-                    <div>
-                        <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
-                        <p className="text-xs text-muted-foreground mt-0.5" suppressHydrationWarning>{today}</p>
+            <header className="flex flex-col gap-4 px-4 py-4 bg-card border-b border-border shrink-0">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 shrink-0">
+                        <button
+                            onClick={toggle}
+                            title="Toggle sidebar"
+                            className="p-1.5 rounded-lg hover:bg-muted/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        >
+                            <Menu className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <h1 className="text-lg font-bold text-foreground">Dashboard</h1>
+                            <p className="text-xs text-muted-foreground mt-0.5" suppressHydrationWarning>{today}</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                        <div className="relative hidden lg:block">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Search…  ⌘K"
+                                className="h-8 pl-8 pr-3 w-44 rounded-lg border border-border bg-background text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                            />
+                        </div>
+
+                        <button className="relative p-2 rounded-lg hover:bg-muted/10 transition-colors">
+                            <Bell className="w-4.5 h-4.5 text-muted-foreground" />
+                            <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-danger rounded-full" />
+                        </button>
+
+                        <div className="hidden md:flex items-center gap-2 pl-3 border-l border-border">
+                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+                                <span className="text-xs font-bold text-white">A</span>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-foreground leading-tight">Admin</p>
+                                <p className="text-[10px] text-muted-foreground">Owner</p>
+                            </div>
+                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                        </div>
                     </div>
                 </div>
 
-                <DashboardFilter />
-
-                <div className="flex items-center gap-3 shrink-0">
-                    <div className="relative hidden lg:block">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Search…  ⌘K"
-                            className="h-8 pl-8 pr-3 w-44 rounded-lg border border-border bg-background text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
-                        />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-sm text-muted-foreground">Selected period</p>
+                        <p className="text-base font-semibold text-foreground">{periodLabel}</p>
                     </div>
-
-                    <button className="relative p-2 rounded-lg hover:bg-muted/10 transition-colors">
-                        <Bell className="w-4.5 h-4.5 text-muted-foreground" />
-                        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-danger rounded-full" />
-                    </button>
-
-                    <div className="hidden md:flex items-center gap-2 pl-3 border-l border-border">
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-                            <span className="text-xs font-bold text-white">A</span>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground">Month</label>
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                                className="rounded border px-2 py-1"
+                            >
+                                {[
+                                    "Jan",
+                                    "Feb",
+                                    "Mar",
+                                    "Apr",
+                                    "May",
+                                    "Jun",
+                                    "Jul",
+                                    "Aug",
+                                    "Sep",
+                                    "Oct",
+                                    "Nov",
+                                    "Dec",
+                                ].map((m, idx) => (
+                                    <option key={m} value={idx + 1}>{m}</option>
+                                ))}
+                            </select>
                         </div>
-                        <div>
-                            <p className="text-xs font-semibold text-foreground leading-tight">Admin</p>
-                            <p className="text-[10px] text-muted-foreground">Owner</p>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground">Year</label>
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                                className="rounded border px-2 py-1"
+                            >
+                                {Array.from({ length: 6 }).map((_, i) => {
+                                    const y = now.getFullYear() - i
+                                    return <option key={y} value={y}>{y}</option>
+                                })}
+                            </select>
                         </div>
-                        <ChevronDown className="w-3 h-3 text-muted-foreground" />
                     </div>
                 </div>
             </header>
@@ -322,25 +375,7 @@ function DashboardContent() {
                                 <p className="text-xs text-muted-foreground">Selected month vs previous month</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <label className="text-sm text-muted-foreground">Month</label>
-                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="rounded border px-2 py-1">
-                                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
-                                        <option key={m} value={idx + 1}>{m}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <label className="text-sm text-muted-foreground">Year</label>
-                                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="rounded border px-2 py-1">
-                                    {Array.from({ length: 6 }).map((_, i) => {
-                                        const y = now.getFullYear() - i
-                                        return <option key={y} value={y}>{y}</option>
-                                    })}
-                                </select>
-                            </div>
-                        </div>
+                        <p className="text-sm text-muted-foreground">View data for {periodLabel}</p>
                     </div>
 
                     {monthLoading ? (
@@ -446,11 +481,36 @@ function DashboardContent() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+    const now = new Date()
+    const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonthDate.getMonth() + 1)
+    const [selectedYear, setSelectedYear] = useState<number>(defaultMonthDate.getFullYear())
+
+    const selectedRange = useMemo(() => {
+        const start = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1))
+        const end = new Date(Date.UTC(selectedYear, selectedMonth, 0))
+        const from = start.toISOString().split("T")[0]
+        const to = end.toISOString().split("T")[0]
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return {
+            from,
+            to,
+            label: `${monthNames[selectedMonth - 1]} ${selectedYear}`,
+            custom: true,
+        }
+    }, [selectedMonth, selectedYear])
+
     return (
         <Suspense fallback={<PageSkeleton />}>
-            <DashboardFilterProvider>
-                <DashboardContent />
-            </DashboardFilterProvider>
+            <DashboardRangeProvider value={selectedRange}>
+                <DashboardContent
+                    selectedMonth={selectedMonth}
+                    selectedYear={selectedYear}
+                    setSelectedMonth={setSelectedMonth}
+                    setSelectedYear={setSelectedYear}
+                    periodLabel={selectedRange.label}
+                />
+            </DashboardRangeProvider>
         </Suspense>
     )
 }
