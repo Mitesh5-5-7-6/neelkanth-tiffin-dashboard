@@ -17,7 +17,7 @@ import type { ImportPreviewRow, ImportProgressEvent, ImportRunReport, ImportSumm
 import type { BulkSavePayload } from "@/types/tiffin.type"
 import { useAllCustomers } from "@/hooks/useCustomers"
 
-async function saveBulkPayload(payload: BulkSavePayload) {
+async function saveBulkPayload(payload: BulkSavePayload[]) {
     const response = await fetch("/api/tiffin-entries/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,26 +86,34 @@ export default function ImportEntriesPage() {
         }
 
         setIsImporting(true)
-        setProgress({ completed: 0, total: payloads.length, currentDate: "", status: "importing" })
+        setProgress({ completed: 0, total: 1, currentDate: "Entire month", status: "importing" })
 
         const results: ImportRunReport["results"] = []
         const failedDates: string[] = []
 
-        for (const [index, payload] of payloads.entries()) {
-            setProgress({ completed: index, total: payloads.length, currentDate: payload.entry_date, status: "importing" })
-            try {
-                await saveBulkPayload(payload)
+        try {
+            await saveBulkPayload(payloads)
+            for (const payload of payloads) {
                 results.push({ date: payload.entry_date, success: true, entryCount: payload.entries.length })
-            } catch (err) {
-                const message = err instanceof Error ? err.message : "Bulk import failed"
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Bulk import failed"
+            for (const payload of payloads) {
                 failedDates.push(payload.entry_date)
                 results.push({ date: payload.entry_date, success: false, error: message, entryCount: payload.entries.length })
             }
         }
 
-        setProgress({ completed: payloads.length, total: payloads.length, currentDate: "", status: "complete" })
+        setProgress({ completed: 1, total: 1, currentDate: "", status: "complete" })
         setIsImporting(false)
-        setReport({ successCount: results.filter((item) => item.success).length, failedCount: results.filter((item) => !item.success).length, failedDates, totalImported: results.filter((item) => item.success).reduce((sum, item) => sum + item.entryCount, 0), totalFailed: results.filter((item) => !item.success).reduce((sum, item) => sum + item.entryCount, 0), results })
+        setReport({
+            successCount: results.filter((item) => item.success).length,
+            failedCount: results.filter((item) => !item.success).length,
+            failedDates,
+            totalImported: results.filter((item) => item.success).reduce((sum, item) => sum + item.entryCount, 0),
+            totalFailed: results.filter((item) => !item.success).reduce((sum, item) => sum + item.entryCount, 0),
+            results,
+        })
         if (failedDates.length) {
             toast.error(`${failedDates.length} date${failedDates.length > 1 ? "s" : ""} failed to import.`)
         } else {
@@ -158,9 +166,7 @@ export default function ImportEntriesPage() {
                             </div>
 
                             {summary ? <ImportSummaryCard summary={summary} /> : null}
-                            <ExcelPreviewTable rows={previewRows} onUpdateRow={(id, morning, evening) => {
-                                setPreviewRows((prev) => prev.map((r) => r.id === id ? ({ ...r, morningQty: morning, eveningQty: evening }) : r))
-                            }} />
+                            <ExcelPreviewTable rows={previewRows} />
                         </div>
                     ) : null}
 
