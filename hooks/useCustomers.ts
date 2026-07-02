@@ -42,6 +42,32 @@ export function useCustomer(id: string) {
     })
 }
 
+export function useAllCustomers() {
+    return useQuery<Customer[]>({
+        queryKey: ["customers", "all"],
+        queryFn: async () => {
+            let page = 1
+            const collected: Customer[] = []
+
+            while (true) {
+                const response = await fetch(buildCustomerUrl({ page, limit: 100 }))
+                const json = await response.json()
+                if (!response.ok) throw json
+
+                const payload = json as CustomerListResponse
+                collected.push(...(payload.data ?? []))
+
+                const meta = payload.meta
+                if (!meta || page >= meta.totalPages) break
+                page += 1
+            }
+
+            return collected
+        },
+        staleTime: 60_000,
+    })
+}
+
 export function useCustomerStats() {
     return useQuery<StatsResponse>({
         queryKey: ["customers", "stats"],

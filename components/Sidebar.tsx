@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
         icon: UtensilsCrossed,
         children: [
             { href: "/tiffin-entries", label: "Daily Entries", icon: CalendarDays },
+            { href: "/dashboard/import-entries", label: "Import Entries", icon: CalendarDays },
         ],
     },
     { href: "/payments", label: "Payments", icon: Wallet },

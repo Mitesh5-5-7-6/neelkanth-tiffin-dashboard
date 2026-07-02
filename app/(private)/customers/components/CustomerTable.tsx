@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-table"
 import {
     Eye, Pencil, Trash2, CheckCircle2, Minus,
-    Search, Download, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown,
+    Search, Download, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Printer,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -62,6 +62,7 @@ export default function CustomerTable({
     selectedId,
 }: CustomerTableProps) {
     const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null)
+    const [downloadingFor, setDownloadingFor] = useState<string | null>(null)
     const [sorting, setSorting] = useState<SortingState>([{ id: "full_name", desc: false }])
 
     const customerIds = useMemo(() => customers.map((c) => c._id), [customers])
@@ -94,6 +95,35 @@ export default function CustomerTable({
         if (deleteTarget) {
             onDelete(deleteTarget._id)
             setDeleteTarget(null)
+        }
+    }
+
+    async function handleDownloadPdf(customer: Customer) {
+        const customerId = customer._id
+        const qs = new URLSearchParams({
+            customerId,
+            name: customer.full_name ?? "",
+        })
+
+        try {
+            setDownloadingFor(customerId)
+            const res = await fetch(`/api/invoice/generate?${qs.toString()}`)
+            if (!res.ok) throw new Error("Failed to generate PDF")
+
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `invoice-${customerId}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+        } catch (err) {
+            console.error(err)
+            alert("Failed to download invoice PDF")
+        } finally {
+            setDownloadingFor(null)
         }
     }
 
@@ -223,6 +253,14 @@ export default function CustomerTable({
                             <Pencil className="w-4 h-4" />
                         </button>
                         <button
+                            onClick={() => handleDownloadPdf(c)}
+                            className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
+                            title="Download invoice PDF"
+                            disabled={!!downloadingFor}
+                        >
+                            <Printer className="w-4 h-4" />
+                        </button>
+                        <button
                             onClick={() => setDeleteTarget(c)}
                             className="p-1.5 rounded-lg hover:bg-danger/10 text-muted hover:text-danger transition-colors"
                             title="Delete customer"
@@ -233,7 +271,7 @@ export default function CustomerTable({
                 )
             },
         }),
-    ], [params, onView, onEdit, setDeleteTarget])
+    ], [params, onView, onEdit, setDeleteTarget, downloadingFor])
 
     const table = useReactTable({
         data: customers,
