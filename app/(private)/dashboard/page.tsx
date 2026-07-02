@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useState } from "react"
 import dynamic from "next/dynamic"
 import { motion } from "framer-motion"
 import {
@@ -158,7 +158,12 @@ function PageSkeleton() {
 function DashboardContent() {
     const { toggle } = useSidebar()
     const { data: stats, isLoading, isError } = useDashboardStats()
-    const { data: month, isLoading: monthLoading, isError: monthError } = useMonthSummary()
+    const now = new Date()
+    const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonthDate.getMonth() + 1)
+    const [selectedYear, setSelectedYear] = useState<number>(defaultMonthDate.getFullYear())
+
+    const { data: month, isLoading: monthLoading, isError: monthError } = useMonthSummary(selectedMonth, selectedYear)
     const { label: periodLabel } = useDashboardFilter()
 
     const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`
@@ -309,11 +314,32 @@ function DashboardContent() {
                     transition={{ delay: 0.3, duration: 0.35 }}
                     className="bg-card rounded-2xl border border-border p-5"
                 >
-                    <div className="flex items-center gap-2 mb-5">
-                        <CalendarDays className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                            <h3 className="text-sm font-semibold text-foreground">This Month at a Glance</h3>
-                            <p className="text-xs text-muted-foreground">Current month vs previous month</p>
+                    <div className="flex items-center justify-between gap-2 mb-5">
+                        <div className="flex items-center gap-2">
+                            <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                                <h3 className="text-sm font-semibold text-foreground">This Month at a Glance</h3>
+                                <p className="text-xs text-muted-foreground">Selected month vs previous month</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-muted-foreground">Month</label>
+                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="rounded border px-2 py-1">
+                                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
+                                        <option key={m} value={idx + 1}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-muted-foreground">Year</label>
+                                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="rounded border px-2 py-1">
+                                    {Array.from({ length: 6 }).map((_, i) => {
+                                        const y = now.getFullYear() - i
+                                        return <option key={y} value={y}>{y}</option>
+                                    })}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
