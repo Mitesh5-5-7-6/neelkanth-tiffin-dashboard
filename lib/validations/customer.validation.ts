@@ -29,10 +29,10 @@ export const createCustomerSchema = z.object({
         .min(2, 'Name must be at least 2 characters')
         .max(100, 'Name too long')
         .trim(),
-    phone: z
-        .string()
-        .min(1, 'Phone is required')
-        .regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'),
+    phone: z.preprocess(
+        (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
+        z.string().max(15, 'Phone number too long').trim().optional()
+    ),
     address: z.string().max(200, 'Address too long').trim().optional(),
     notes: z.string().max(500, 'Notes too long').trim().optional(),
     tiffin_defaults: tiffinDefaultsSchema,

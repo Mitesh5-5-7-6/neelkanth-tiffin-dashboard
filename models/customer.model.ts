@@ -16,7 +16,7 @@ const TiffinDefaultsSchema = new Schema(
 const CustomerSchema = new Schema<ICustomer>(
     {
         full_name: { type: String, required: true, trim: true },
-        phone: { type: String, required: true, unique: true, trim: true },
+        phone: { type: String, trim: true },
         address: { type: String, trim: true },
         notes: { type: String, trim: true },
         is_active: { type: Boolean, default: true },
@@ -25,7 +25,7 @@ const CustomerSchema = new Schema<ICustomer>(
     { timestamps: true }
 );
 
-CustomerSchema.index({ phone: 1 }, { unique: true });
+CustomerSchema.index({ phone: 1 }, { unique: true, sparse: true });
 CustomerSchema.index({ full_name: 'text', phone: 'text' });
 CustomerSchema.index({ is_active: 1 });
 CustomerSchema.index({ createdAt: -1 });

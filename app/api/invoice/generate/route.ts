@@ -1,35 +1,68 @@
-import { NextRequest } from 'next/server';
-import generatePdf from '@/lib/pdf/generatePdf'
+import { NextResponse } from 'next/server'
+import generateInvoicePdf from '../../../../lib/invoice/generateInvoicePdf'
+import { checkAuth } from '@/lib/checkAuth'
 
-export async function GET(req: NextRequest) {
+export async function POST(req: Request) {
+    const { error } = await checkAuth()
+    if (error) return error
+
     try {
-        const urlObj = new URL(req.url)
-        const sp = urlObj.searchParams
-        const customerId = sp.get('customerId') ?? 'c_01'
-        const start_date = sp.get('start_date')
-        const end_date = sp.get('end_date')
-        const name = sp.get('name')
+        const body = await req.json()
+        const { customerId, from, to } = body || {}
+        if (!customerId || !from || !to) {
+            return NextResponse.json({ error: 'customerId, from and to are required' }, { status: 400 })
+        }
 
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
-        const params = new URLSearchParams()
-        params.set('customerId', customerId)
-        if (start_date) params.set('start_date', start_date)
-        if (end_date) params.set('end_date', end_date)
-        if (name) params.set('name', name)
+        const { buffer, filename } = await generateInvoicePdf(customerId, from, to)
 
-        const pageUrl = `${baseUrl}/invoice/print?${params.toString()}`
-
-        const pdfBuffer = await generatePdf(pageUrl)
-
-        return new Response(Buffer.from(pdfBuffer), {
+        // Return Blob directly as PDF response
+        return new Response(buffer, {
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': `attachment; filename="invoice-${customerId}.pdf"`,
-            },
+                'Content-Disposition': `attachment; filename="${filename}"`
+            }
         })
     } catch (err) {
-        console.error('invoice generate error', err)
-        return new Response(JSON.stringify({ error: 'Failed to generate invoice PDF' }), { status: 500 })
+        const message = err instanceof Error ? err.message : String(err)
+        return NextResponse.json({ error: message }, { status: 500 })
+    }
+}
+export async function GET(req: Request) {
+    const { error } = await checkAuth()
+    if (error) return error
+
+    try {
+        const { searchParams } = new URL(req.url)
+        const customerId = searchParams.get('customerId')
+        const from = searchParams.get('from')
+        const to = searchParams.get('to')
+
+        if (!customerId) {
+            return NextResponse.json({ error: 'customerId is required' }, { status: 400 })
+        }
+
+        // Use provided dates or default to current month
+        const now = new Date()
+        const fromDate = from || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+        const toDate = to || now.toISOString().split('T')[0]
+
+        console.log('[Invoice PDF] Generating for customerId:', customerId, 'from:', fromDate, 'to:', toDate)
+
+        const { buffer, filename } = await generateInvoicePdf(customerId, fromDate, toDate)
+
+        console.log('[Invoice PDF] Generated successfully:', filename)
+
+        return new Response(buffer, {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': `attachment; filename="${filename}"`
+            }
+        })
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[Invoice API Error]', message, err)
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }
