@@ -59,11 +59,15 @@ export default function TiffinEntriesPage() {
     const saveMutation = useBulkSaveTiffinEntries()
 
     useEffect(() => {
-        if (previewData?.data) {
-            const built = buildRows(previewData.data)
+        if (!previewData?.data) return
+
+        const built = buildRows(previewData.data)
+        const timer = setTimeout(() => {
             setRows(built)
             setOriginalRows(built)
-        }
+        }, 0)
+
+        return () => clearTimeout(timer)
     }, [previewData])
 
     // ── Row mutations ──────────────────────────────────────────────────────────
