@@ -10,14 +10,17 @@ export function validateImportRows(
     const issues: ImportValidationIssue[] = [...workbook.issues, ...customerIssues]
 
     const normalizedRows = matchedRows.map((row) => ({ ...row }))
-    const dateCounts = new Map<string, number>()
 
-    for (const row of normalizedRows) {
-        if (!row.date) continue
-        dateCounts.set(row.date, (dateCounts.get(row.date) ?? 0) + 1)
+    // Determine duplicate dates based on workbook rows (i.e. repeated date rows in the sheet),
+    // not by counting preview rows (which repeat per customer). This prevents every date
+    // from being marked as duplicate when there are multiple customer columns.
+    const rowDateCounts = new Map<string, number>()
+    for (const r of workbook.rows) {
+        if (!r.date) continue
+        rowDateCounts.set(r.date, (rowDateCounts.get(r.date) ?? 0) + 1)
     }
 
-    const duplicateDates = new Set(Array.from(dateCounts.entries()).filter(([, count]) => count > 1).map(([date]) => date))
+    const duplicateDates = new Set(Array.from(rowDateCounts.entries()).filter(([, count]) => count > 1).map(([date]) => date))
 
     const validatedRows: ImportPreviewRow[] = normalizedRows.map((row) => {
         const customer = customers.find((entry) => entry._id === row.customerId)

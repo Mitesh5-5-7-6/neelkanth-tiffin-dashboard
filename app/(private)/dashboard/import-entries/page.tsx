@@ -158,7 +158,9 @@ export default function ImportEntriesPage() {
                             </div>
 
                             {summary ? <ImportSummaryCard summary={summary} /> : null}
-                            <ExcelPreviewTable rows={previewRows} />
+                            <ExcelPreviewTable rows={previewRows} onUpdateRow={(id, morning, evening) => {
+                                setPreviewRows((prev) => prev.map((r) => r.id === id ? ({ ...r, morningQty: morning, eveningQty: evening }) : r))
+                            }} />
                         </div>
                     ) : null}
 
