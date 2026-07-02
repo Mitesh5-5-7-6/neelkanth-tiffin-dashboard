@@ -5,7 +5,7 @@
 // import { authOptions } from "@/lib/authOptions"
 import AppShell from "@/components/AppShell"
 
-export default async function PrivateLayout({
+export default function PrivateLayout({
     children,
 }: {
     children: React.ReactNode
