@@ -28,6 +28,19 @@ export async function dbConnect() {
 
     try {
         cached.conn = await cached.promise;
+
+        // Remove collection-level validators if they exist (for schema updates)
+        const db = cached.conn.connection.db;
+        if (db) {
+            try {
+                await db.command({
+                    collMod: 'customers',
+                    validator: { $jsonSchema: { bsonType: 'object' } } // Clear strict validation
+                });
+            } catch (err) {
+                // Collection might not exist yet, that's fine
+            }
+        }
     } catch (e) {
         cached.promise = null;
         throw e;

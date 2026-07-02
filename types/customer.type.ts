@@ -11,7 +11,7 @@ export interface ITiffinDefaults {
 
 export interface ICustomer extends Document {
     full_name: string;
-    phone: string;
+    phone?: string;
     address?: string;
     notes?: string;
     is_active: boolean;
@@ -23,7 +23,7 @@ export interface ICustomer extends Document {
 export interface Customer {
     _id: string;
     full_name: string;
-    phone: string;
+    phone?: string;
     address?: string;
     notes?: string;
     is_active: boolean;

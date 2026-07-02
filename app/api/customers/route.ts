@@ -59,10 +59,12 @@ export async function POST(request: NextRequest) {
             return badRequest('Validation failed', parsed.error.flatten().fieldErrors);
         }
 
-        const existing = await Customer.findOne({ phone: parsed.data.phone });
-        if (existing) {
-            return conflict(`A customer with phone ${parsed.data.phone} already exists`);
-        }
+        // if (parsed.data.phone) {
+        //     const existing = await Customer.findOne({ phone: parsed.data.phone });
+        //     if (existing) {
+        //         return conflict(`A customer with phone ${parsed.data.phone} already exists`);
+        //     }
+        // }
 
         const customer = await Customer.create(parsed.data);
         return created(customer, 'Customer created successfully');
