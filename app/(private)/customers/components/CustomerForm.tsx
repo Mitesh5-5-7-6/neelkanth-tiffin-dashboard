@@ -43,7 +43,7 @@ const EMPTY_DEFAULTS: CreateCustomerInput = {
 function toFormValues(customer: Customer): CreateCustomerInput {
     return {
         full_name: customer.full_name,
-        phone: customer.phone,
+        phone: customer.phone ?? "",
         address: customer.address ?? "",
         notes: customer.notes ?? "",
         tiffin_defaults: {
@@ -79,10 +79,10 @@ export default function CustomerForm({ open, customer, onClose, onSubmit, isLoad
     })
 
     useEffect(() => {
-        if (open) {
-            setSubmitted(false)
-            form.reset(customer ? toFormValues(customer) : EMPTY_DEFAULTS)
-        }
+        if (!open) return
+        const t = window.setTimeout(() => setSubmitted(false), 0)
+        form.reset(customer ? toFormValues(customer) : EMPTY_DEFAULTS)
+        return () => window.clearTimeout(t)
     }, [open, customer])
 
     function handleSubmit(e: React.FormEvent) {
@@ -134,7 +134,7 @@ export default function CustomerForm({ open, customer, onClose, onSubmit, isLoad
                     >
                         {(field) => (
                             <div className="space-y-1.5">
-                                <Label htmlFor={field.name}>Phone Number *</Label>
+                                <Label htmlFor={field.name}>Phone Number</Label>
                                 <Input
                                     id={field.name}
                                     placeholder="9876543210"

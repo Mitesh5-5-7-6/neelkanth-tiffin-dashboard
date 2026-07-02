@@ -115,7 +115,7 @@ export default function CustomersPage() {
                 {/* Main content */}
                 <div className="flex-1 overflow-auto p-6 space-y-5">
                     <CustomerStats />
-                    <BulkCopySection />
+                    {/* <BulkCopySection /> */}
                     <CustomerTable
                         customers={customers}
                         isLoading={isLoading}
