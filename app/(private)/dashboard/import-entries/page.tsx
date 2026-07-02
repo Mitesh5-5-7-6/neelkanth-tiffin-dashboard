@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AlertCircle, ArrowLeft, Loader2, Menu, PlayCircle, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
@@ -41,18 +41,24 @@ export default function ImportEntriesPage() {
     const [isImporting, setIsImporting] = useState(false)
     const [progress, setProgress] = useState<ImportProgressEvent>({ completed: 0, total: 0, currentDate: "", status: "idle" })
     const [report, setReport] = useState<ImportRunReport | null>(null)
+    const now = new Date()
+    const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonthDate.getMonth() + 1)
+    const [selectedYear, setSelectedYear] = useState<number>(defaultMonthDate.getFullYear())
+    const [lastFile, setLastFile] = useState<File | null>(null)
     const combinedError = error ?? (isCustomersError ? "Unable to load customer data. Please refresh and try again." : null)
 
     async function handleFileSelected(file: File) {
         setError(null)
         setIsParsing(true)
         setFileName(file.name)
+        setLastFile(file)
         setPreviewRows([])
         setIssues([])
         setReport(null)
 
         try {
-            const workbook = await parseWorkbookFile(file)
+            const workbook = await parseWorkbookFile(file, selectedMonth, selectedYear)
             const validation = validateImportRows(workbook, customers)
             setPreviewRows(validation.previewRows)
             setIssues([...validation.issues.map((issue) => issue.message), ...workbook.issues.map((issue) => issue.message)])
@@ -76,6 +82,38 @@ export default function ImportEntriesPage() {
             setIsParsing(false)
         }
     }
+
+    useEffect(() => {
+        if (!lastFile) return
+        let mounted = true
+            ; (async () => {
+                setIsParsing(true)
+                try {
+                    const workbook = await parseWorkbookFile(lastFile, selectedMonth, selectedYear)
+                    if (!mounted) return
+                    const validation = validateImportRows(workbook, customers)
+                    setPreviewRows(validation.previewRows)
+                    setIssues([...validation.issues.map((issue) => issue.message), ...workbook.issues.map((issue) => issue.message)])
+                    setSummary({
+                        importedCustomers: validation.summary.importedCustomers,
+                        skipped: validation.summary.skipped,
+                        unmatched: validation.summary.unmatched,
+                        duplicateNames: validation.summary.duplicateNames,
+                        duplicateDates: validation.summary.duplicateDates,
+                        totalEntries: validation.summary.totalEntries,
+                        totalDates: validation.summary.totalDates,
+                    })
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : "Unable to parse the workbook."
+                    setError(message)
+                } finally {
+                    setIsParsing(false)
+                }
+            })()
+        return () => {
+            mounted = false
+        }
+    }, [selectedMonth, selectedYear, lastFile, customers])
 
     async function handleImport() {
         if (!previewRows.length) return
@@ -143,6 +181,27 @@ export default function ImportEntriesPage() {
 
             <main className="flex-1 overflow-auto p-6">
                 <div className="mx-auto flex max-w-7xl flex-col gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground">Month</label>
+                            <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="rounded border px-2 py-1">
+                                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
+                                    <option key={m} value={idx + 1}>{m}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground">Year</label>
+                            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="rounded border px-2 py-1">
+                                {Array.from({ length: 6 }).map((_, i) => {
+                                    const y = now.getFullYear() - i
+                                    return <option key={y} value={y}>{y}</option>
+                                })}
+                            </select>
+                        </div>
+                    </div>
+
                     <ExcelUploadCard onFileSelected={handleFileSelected} isLoading={isParsing} error={combinedError} acceptedFileName={fileName} />
 
                     {isCustomersLoading ? (

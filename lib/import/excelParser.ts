@@ -15,7 +15,11 @@ function toDisplayString(value: unknown): string {
   return String(value);
 }
 
-function parseDateValue(value: unknown): {
+function parseDateValue(
+  value: unknown,
+  defaultMonth?: number,
+  defaultYear?: number,
+): {
   date: string | null;
   label: string;
   issue?: ImportValidationIssue;
@@ -67,12 +71,14 @@ function parseDateValue(value: unknown): {
     const day = Number(dayOnly[1]);
     if (day >= 1 && day <= 31) {
       const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const parsed = new Date(year, month, day);
+      const year =
+        typeof defaultYear === "number" ? defaultYear : now.getFullYear();
+      const monthIndex =
+        typeof defaultMonth === "number" ? defaultMonth - 1 : now.getMonth();
+      const parsed = new Date(year, monthIndex, day);
       if (parsed.getDate() === day) {
         return {
-          date: `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+          date: `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
           label: normalized,
         };
       }
@@ -185,6 +191,8 @@ function parseCellValue(rawValue: unknown): ParsedCellValue {
 
 export async function parseWorkbookFile(
   file: File,
+  defaultMonth?: number,
+  defaultYear?: number,
 ): Promise<ParsedWorkbookData> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
@@ -212,7 +220,7 @@ export async function parseWorkbookFile(
   const issues: ImportValidationIssue[] = [];
 
   for (const [index, row] of rows.slice(1).entries()) {
-    const parsedDate = parseDateValue(row[0]);
+    const parsedDate = parseDateValue(row[0], defaultMonth, defaultYear);
     const cells: ParsedWorkbookCell[] = customerColumns.map(
       (customerName, columnIndex) => {
         const parsedValue = parseCellValue(row[columnIndex + 1]);
