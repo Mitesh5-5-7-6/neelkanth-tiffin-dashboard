@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
         const rows = await TiffinEntry.aggregate([
             { $match: { entry_date: { $gte: start, $lt: end } } },
             { $group: { _id: "$customer_id", totalTiffins: { $sum: "$total_qty" }, totalAmount: { $sum: "$total_amount" } } },
-            { $sort: { totalAmount: -1 } },
+            // Rank by tiffin count (matches the card's "By total tiffins"),
+            // breaking ties by billed amount.
+            { $sort: { totalTiffins: -1, totalAmount: -1 } },
             { $limit: 5 },
             {
                 $lookup: {
