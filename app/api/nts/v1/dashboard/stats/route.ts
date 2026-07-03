@@ -8,6 +8,15 @@ import { checkAuth } from "@/lib/checkAuth"
 import { success, internalServerError } from "@/lib/apiResponse"
 import { parseRequestRange, pctChange } from "@/lib/dashboard-dates"
 
+/**
+ * Headline stats for the selected period.
+ *
+ * Revenue is the *billed value of tiffins served* in the period (accrual:
+ * sum of TiffinEntry.total_amount), matching the Revenue-vs-Expense chart and
+ * the month summary. Profit = revenue − expenses. Cash actually collected is a
+ * separate concept surfaced through "Pending Payments", so it is not mixed in
+ * here (mixing collections into revenue is what made these cards read wrong).
+ */
 export async function GET(request: NextRequest) {
     const { error } = await checkAuth()
     if (error) return error
@@ -16,31 +25,17 @@ export async function GET(request: NextRequest) {
         await dbConnect()
         const { start, end, prevStart, prevEnd } = parseRequestRange(request)
 
-        const [
-            currTiffin,
-            prevTiffin,
-            currRevenue,    // cash collected — sum of paid_amount from payments
-            prevRevenue,
-            currExpense,
-            prevExpense,
-            pendingResult,
-        ] = await Promise.all([
-            TiffinEntry.aggregate([
-                { $match: { entry_date: { $gte: start, $lt: end } } },
-                { $group: { _id: null, morning: { $sum: "$morning_qty" }, evening: { $sum: "$evening_qty" }, total: { $sum: "$total_qty" } } },
-            ]),
-            TiffinEntry.aggregate([
-                { $match: { entry_date: { $gte: prevStart, $lt: prevEnd } } },
-                { $group: { _id: null, morning: { $sum: "$morning_qty" }, evening: { $sum: "$evening_qty" }, total: { $sum: "$total_qty" } } },
-            ]),
-            Payment.aggregate([
-                { $match: { payment_date: { $gte: start, $lt: end } } },
-                { $group: { _id: null, amount: { $sum: "$paid_amount" } } },
-            ]),
-            Payment.aggregate([
-                { $match: { payment_date: { $gte: prevStart, $lt: prevEnd } } },
-                { $group: { _id: null, amount: { $sum: "$paid_amount" } } },
-            ]),
+        const tiffinGroup = {
+            _id: null,
+            morning: { $sum: "$morning_qty" },
+            evening: { $sum: "$evening_qty" },
+            total: { $sum: "$total_qty" },
+            revenue: { $sum: "$total_amount" },
+        }
+
+        const [currTiffin, prevTiffin, currExpense, prevExpense, pendingResult] = await Promise.all([
+            TiffinEntry.aggregate([{ $match: { entry_date: { $gte: start, $lt: end } } }, { $group: tiffinGroup }]),
+            TiffinEntry.aggregate([{ $match: { entry_date: { $gte: prevStart, $lt: prevEnd } } }, { $group: tiffinGroup }]),
             Expense.aggregate([
                 { $match: { expense_date: { $gte: start, $lt: end }, is_deleted: false } },
                 { $group: { _id: null, amount: { $sum: "$amount" } } },
@@ -62,38 +57,42 @@ export async function GET(request: NextRequest) {
             ]),
         ])
 
-        const cT = currTiffin[0]   ?? { morning: 0, evening: 0, total: 0 }
-        const pT = prevTiffin[0]   ?? { morning: 0, evening: 0, total: 0 }
-        const cR = currRevenue[0]?.amount  ?? 0
-        const pR = prevRevenue[0]?.amount  ?? 0
-        const cE = currExpense[0]?.amount  ?? 0
-        const pE = prevExpense[0]?.amount  ?? 0
+        const cT = currTiffin[0] ?? { morning: 0, evening: 0, total: 0, revenue: 0 }
+        const pT = prevTiffin[0] ?? { morning: 0, evening: 0, total: 0, revenue: 0 }
+        const cE = currExpense[0]?.amount ?? 0
+        const pE = prevExpense[0]?.amount ?? 0
         const pd = pendingResult[0] ?? { amount: 0, customerCount: 0 }
 
-        return success({
-            todayTiffin: {
-                total: cT.total,
-                morning: cT.morning,
-                evening: cT.evening,
-                vsYesterday: pctChange(cT.total, pT.total),
+        const cProfit = cT.revenue - cE
+        const pProfit = pT.revenue - pE
+
+        return success(
+            {
+                todayTiffin: {
+                    total: cT.total,
+                    morning: cT.morning,
+                    evening: cT.evening,
+                    vsYesterday: pctChange(cT.total, pT.total),
+                },
+                todayRevenue: {
+                    amount: cT.revenue,
+                    vsYesterday: pctChange(cT.revenue, pT.revenue),
+                },
+                todayExpense: {
+                    amount: cE,
+                    vsYesterday: pctChange(cE, pE),
+                },
+                todayProfit: {
+                    amount: cProfit,
+                    vsYesterday: pctChange(cProfit, pProfit),
+                },
+                pendingPayments: {
+                    amount: pd.amount,
+                    customerCount: pd.customerCount,
+                },
             },
-            todayRevenue: {
-                amount: cR,
-                vsYesterday: pctChange(cR, pR),
-            },
-            todayExpense: {
-                amount: cE,
-                vsYesterday: pctChange(cE, pE),
-            },
-            todayProfit: {
-                amount: cR - cE,
-                vsYesterday: pctChange(cR - cE, pR - pE),
-            },
-            pendingPayments: {
-                amount: pd.amount,
-                customerCount: pd.customerCount,
-            },
-        }, "Dashboard stats fetched")
+            "Dashboard stats fetched"
+        )
     } catch (e) {
         return internalServerError(e)
     }
