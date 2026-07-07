@@ -28,8 +28,8 @@ function toISO(d: Date) { return format(d, "yyyy-MM-dd") }
 function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return toISO(d) }
 function parseISO(iso: string) { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d) }
 
-function calcTotal(mActive: boolean, mPrice: number, eActive: boolean, ePrice: number) {
-    return (mActive ? mPrice : 0) + (eActive ? ePrice : 0)
+function calcTotal(mActive: number, mPrice: number, eActive: number, ePrice: number) {
+    return (mActive ? mActive * mPrice : 0) + (eActive ? eActive * ePrice : 0)
 }
 function sumExtrasAmount(extras?: TiffinExtraItem[]) {
     return (extras ?? []).reduce((sum, item) => sum + (item.qty > 0 ? item.price * item.qty : 0), 0)
@@ -180,7 +180,7 @@ export default function TiffinEntriesPage() {
         const totalQty = rows.reduce((s, r) =>
             s + (r.morning ? r.morning_qty : 0) + (r.evening ? r.evening_qty : 0), 0)
         const totalAmount = rows.reduce((s, r) =>
-            s + calcTotal(r.morning, r.morning_price, r.evening, r.evening_price) + sumExtrasAmount(r.extras), 0)
+            s + calcTotal(r.morning_qty, r.morning_price, r.evening_qty, r.evening_price) + sumExtrasAmount(r.extras), 0)
         return { active, totalQty, totalAmount }
     }, [rows])
 
@@ -349,8 +349,8 @@ export default function TiffinEntriesPage() {
                                         rows.map((row, i) => {
                                             const globalIdx = i
                                             const rowTotal = calcTotal(
-                                                row.morning, row.morning_price,
-                                                row.evening, row.evening_price
+                                                row.morning_qty, row.morning_price,
+                                                row.evening_qty, row.evening_price
                                             ) + sumExtrasAmount(row.extras)
                                             return (
                                                 <tr
