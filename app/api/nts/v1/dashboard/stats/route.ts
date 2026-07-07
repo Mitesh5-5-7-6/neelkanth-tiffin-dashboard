@@ -8,6 +8,15 @@ import { checkAuth } from "@/lib/checkAuth";
 import { success, internalServerError } from "@/lib/apiResponse";
 import { parseRequestRange, pctChange } from "@/lib/dashboard-dates";
 
+/**
+ * Headline stats for the selected period.
+ *
+ * Revenue is the *billed value of tiffins served* in the period (accrual:
+ * sum of TiffinEntry.total_amount), matching the Revenue-vs-Expense chart and
+ * the month summary. Profit = revenue − expenses. Cash actually collected is a
+ * separate concept surfaced through "Pending Payments", so it is not mixed in
+ * here (mixing collections into revenue is what made these cards read wrong).
+ */
 export async function GET(request: NextRequest) {
   const { error } = await checkAuth();
   if (error) return error;
