@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import {
     CalendarDays, Save, Copy, RotateCcw, Menu, Loader2,
     Users, CheckCircle2, UtensilsCrossed, IndianRupee, Info,
+    Plus, Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -14,10 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import StatCard from "@/components/StatCard"
 import { useSidebar } from "@/components/AppShell"
 import { useTiffinPreview, useBulkSaveTiffinEntries } from "@/hooks/useTiffinEntries"
-import type { TiffinPreviewRow, BulkEntryInput } from "@/types/tiffin.type"
+import type { TiffinPreviewRow, BulkEntryInput, TiffinExtraItem } from "@/types/tiffin.type"
 import { cn } from "@/lib/utils"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,13 +31,15 @@ function parseISO(iso: string) { const [y, m, d] = iso.split("-").map(Number); r
 function calcTotal(mActive: boolean, mPrice: number, eActive: boolean, ePrice: number) {
     return (mActive ? mPrice : 0) + (eActive ? ePrice : 0)
 }
-
+function sumExtrasAmount(extras?: TiffinExtraItem[]) {
+    return (extras ?? []).reduce((sum, item) => sum + (item.qty > 0 ? item.price * item.qty : 0), 0)
+}
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface EntryRow extends TiffinPreviewRow { changed: boolean }
 
 function buildRows(preview: TiffinPreviewRow[]): EntryRow[] {
-    return preview.map((r) => ({ ...r, changed: false }))
+    return preview.map((r) => ({ ...r, extras: r.extras ?? [], changed: false }))
 }
 
 const AVATAR_COLORS = ["bg-primary", "bg-success", "bg-warning", "bg-purple", "bg-danger"]
@@ -54,6 +58,7 @@ export default function TiffinEntriesPage() {
     const [copyMode, setCopyMode] = useState(false)
     const [rows, setRows] = useState<EntryRow[]>([])
     const [originalRows, setOriginalRows] = useState<EntryRow[]>([])
+    const [extrasEditor, setExtrasEditor] = useState<{ customerId: string | null; draft: TiffinExtraItem[] }>({ customerId: null, draft: [] })
 
     const { data: previewData, isLoading, isFetching } = useTiffinPreview(date, fromDate)
     const saveMutation = useBulkSaveTiffinEntries()
@@ -85,7 +90,8 @@ export default function TiffinEntriesPage() {
                 updated.evening !== orig?.evening ||
                 updated.evening_qty !== orig?.evening_qty ||
                 updated.evening_price !== orig?.evening_price ||
-                updated.evening_paid !== orig?.evening_paid
+                updated.evening_paid !== orig?.evening_paid ||
+                JSON.stringify(updated.extras ?? []) !== JSON.stringify(orig?.extras ?? [])
             next[idx] = { ...updated, changed }
             return next
         })
@@ -118,6 +124,31 @@ export default function TiffinEntriesPage() {
     }
     function handleResetToDefaults() { setFromDate(null); setCopyMode(false) }
 
+    function openExtrasEditor(customerId: string, extras: TiffinExtraItem[]) {
+        setExtrasEditor({ customerId, draft: extras.map((item) => ({ ...item })) })
+    }
+
+    function addExtrasDraftItem() {
+        setExtrasEditor((prev) => ({ ...prev, draft: [...prev.draft, { item: "", qty: 1, price: 0 }] }))
+    }
+
+    function removeExtrasDraftItem(idx: number) {
+        setExtrasEditor((prev) => ({ ...prev, draft: prev.draft.filter((_, itemIdx) => itemIdx !== idx) }))
+    }
+
+    function saveExtrasForRow(idx: number) {
+        const normalized = extrasEditor.draft
+            .filter((item) => item.item.trim())
+            .map((item) => ({
+                item: item.item.trim(),
+                qty: Math.max(1, Math.round(item.qty || 1)),
+                price: Math.max(0, Math.round(item.price || 0)),
+            }))
+
+        updateRow(idx, { extras: normalized })
+        setExtrasEditor({ customerId: null, draft: [] })
+    }
+
     // ── Save ───────────────────────────────────────────────────────────────────
 
     async function handleSave() {
@@ -129,6 +160,7 @@ export default function TiffinEntriesPage() {
             evening_qty: r.evening ? r.evening_qty : 0,
             evening_price: r.evening_price,
             evening_paid: r.evening_paid,
+            extras: r.extras ?? [],
         }))
         try {
             const result = await saveMutation.mutateAsync({ entry_date: date, entries })
@@ -148,7 +180,7 @@ export default function TiffinEntriesPage() {
         const totalQty = rows.reduce((s, r) =>
             s + (r.morning ? r.morning_qty : 0) + (r.evening ? r.evening_qty : 0), 0)
         const totalAmount = rows.reduce((s, r) =>
-            s + calcTotal(r.morning, r.morning_price, r.evening, r.evening_price), 0)
+            s + calcTotal(r.morning, r.morning_price, r.evening, r.evening_price) + sumExtrasAmount(r.extras), 0)
         return { active, totalQty, totalAmount }
     }, [rows])
 
@@ -281,6 +313,7 @@ export default function TiffinEntriesPage() {
                                         <th className="px-4 py-3 text-center font-medium text-muted w-20">E. Qty</th>
                                         <th className="px-4 py-3 text-center font-medium text-muted w-28">E. Price (₹)</th>
                                         <th className="px-4 py-3 text-center font-medium text-muted w-24">E. Paid</th>
+                                        <th className="px-4 py-3 text-left font-medium text-muted w-44">Extras</th>
                                         <th className="px-4 py-3 text-right font-medium text-muted w-28">Total (₹)</th>
                                     </tr>
                                 </thead>
@@ -318,7 +351,7 @@ export default function TiffinEntriesPage() {
                                             const rowTotal = calcTotal(
                                                 row.morning, row.morning_price,
                                                 row.evening, row.evening_price
-                                            )
+                                            ) + sumExtrasAmount(row.extras)
                                             return (
                                                 <tr
                                                     key={row.customer_id}
@@ -431,6 +464,27 @@ export default function TiffinEntriesPage() {
                                                         )}
                                                     </td>
 
+                                                    {/* Extras */}
+                                                    <td className="px-3 py-3 text-left">
+                                                        <div className="flex flex-col gap-2">
+                                                            {row.extras && row.extras.length > 0 ? (
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {row.extras.map((item, itemIdx) => (
+                                                                        <span key={`${row.customer_id}-${itemIdx}`} className="text-xs rounded-full bg-primary/10 text-primary px-2 py-1">
+                                                                            {item.item}: {item.qty} × ₹{item.price}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-muted">No extras</span>
+                                                            )}
+                                                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 w-fit gap-1 text-xs" onClick={() => openExtrasEditor(row.customer_id, row.extras ?? [])}>
+                                                                <Plus className="w-3.5 h-3.5" />
+                                                                {row.extras?.length ? "Edit Extras" : "Add Extra"}
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+
                                                     {/* Total */}
                                                     <td className="px-4 py-3 text-right">
                                                         <span className={cn(
@@ -447,8 +501,27 @@ export default function TiffinEntriesPage() {
                                 </tbody>
                             </table>
                         </div>
-
                     </div>
+
+                    {rows.map((row, idx) => (
+                        <ExtrasEditorSheet
+                            key={`${row.customer_id}-extras`}
+                            open={extrasEditor.customerId === row.customer_id}
+                            customerName={row.name}
+                            items={extrasEditor.customerId === row.customer_id ? extrasEditor.draft : []}
+                            onOpenChange={(open) => {
+                                if (!open) setExtrasEditor({ customerId: null, draft: [] })
+                            }}
+                            onItemChange={(itemIdx, patch) => setExtrasEditor((prev) => ({
+                                ...prev,
+                                draft: prev.draft.map((item, currentIdx) => currentIdx === itemIdx ? { ...item, ...patch } : item),
+                            }))}
+                            onAddItem={addExtrasDraftItem}
+                            onRemoveItem={removeExtrasDraftItem}
+                            onSave={() => saveExtrasForRow(idx)}
+                        />
+                    ))}
+
                 </div>
             </div>
 
@@ -476,6 +549,75 @@ export default function TiffinEntriesPage() {
                 </div>
             )}
         </div>
+    )
+}
+
+function ExtrasEditorSheet({
+    open,
+    customerName,
+    items,
+    onOpenChange,
+    onItemChange,
+    onAddItem,
+    onRemoveItem,
+    onSave,
+}: {
+    open: boolean
+    customerName: string
+    items: TiffinExtraItem[]
+    onOpenChange: (open: boolean) => void
+    onItemChange: (idx: number, patch: Partial<TiffinExtraItem>) => void
+    onAddItem: () => void
+    onRemoveItem: (idx: number) => void
+    onSave: () => void
+}) {
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent side="bottom" className="max-h-[80vh] rounded-t-2xl">
+                <SheetHeader>
+                    <SheetTitle>Extras for {customerName}</SheetTitle>
+                    <SheetDescription>Add anything extra for this day, such as roti, sweet, or buttermilk.</SheetDescription>
+                </SheetHeader>
+                <div className="px-6 py-5 space-y-3">
+                    {items.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted">No extras added yet. Add an item to track it on this day.</div>
+                    ) : (
+                        items.map((item, idx) => (
+                            <div key={`${item.item}-${idx}`} className="grid grid-cols-[1.2fr_0.6fr_0.8fr_auto] gap-2 items-center rounded-xl border border-border p-3">
+                                <Input
+                                    placeholder="Item"
+                                    value={item.item}
+                                    onChange={(e) => onItemChange(idx, { item: e.target.value })}
+                                />
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={item.qty}
+                                    onChange={(e) => onItemChange(idx, { qty: Math.max(1, Number(e.target.value) || 1) })}
+                                />
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    value={item.price}
+                                    onChange={(e) => onItemChange(idx, { price: Math.max(0, Number(e.target.value) || 0) })}
+                                />
+                                <Button type="button" variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => onRemoveItem(idx)}>
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        ))
+                    )}
+                    <Button type="button" variant="outline" onClick={onAddItem} className="gap-2">
+                        <Plus className="w-4 h-4" />
+                        Add item
+                    </Button>
+                </div>
+                <SheetFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="button" onClick={onSave}>Save extras</Button>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
     )
 }
 

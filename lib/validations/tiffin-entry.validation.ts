@@ -1,5 +1,22 @@
 import { z } from "zod";
 
+export const extraItemSchema = z.object({
+  item: z
+    .string()
+    .trim()
+    .min(1, "Item name is required")
+    .max(50, "Item name too long"),
+  qty: z
+    .number({ message: "Quantity is required" })
+    .int()
+    .min(0, "Quantity cannot be negative")
+    .max(100, "Quantity too high"),
+  price: z
+    .number({ message: "Price is required" })
+    .min(0, "Price cannot be negative")
+    .max(10_000, "Price too high"),
+});
+
 export const bulkEntryInputSchema = z.object({
   customer_id: z.string().min(1, "Customer ID is required"),
   morning_qty: z
@@ -23,6 +40,7 @@ export const bulkEntryInputSchema = z.object({
   is_manual_price: z.boolean().optional().default(false),
   morning_paid: z.boolean().optional().default(false),
   evening_paid: z.boolean().optional().default(false),
+  extras: z.array(extraItemSchema).optional().default([]),
   notes: z.string().max(500, "Notes too long").trim().optional(),
 });
 

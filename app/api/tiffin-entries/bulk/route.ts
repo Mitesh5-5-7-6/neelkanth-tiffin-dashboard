@@ -39,9 +39,14 @@ export async function POST(request: NextRequest) {
       const dateObj = parseDate(payload.entry_date);
       const ops = payload.entries.map((entry) => {
         const total_qty = entry.morning_qty + entry.evening_qty;
+        const extra_amount = (entry.extras ?? []).reduce(
+          (sum, item) => sum + (item.qty > 0 ? item.price * item.qty : 0),
+          0,
+        );
         const total_amount =
           (entry.morning_qty > 0 ? entry.morning_price : 0) +
-          (entry.evening_qty > 0 ? entry.evening_price : 0);
+          (entry.evening_qty > 0 ? entry.evening_price : 0) +
+          extra_amount;
 
         return {
           updateOne: {
@@ -54,6 +59,7 @@ export async function POST(request: NextRequest) {
                 evening_qty: entry.evening_qty,
                 evening_price: entry.evening_price,
                 evening_paid: entry.evening_paid ?? false,
+                extras: entry.extras ?? [],
                 total_qty,
                 total_amount,
                 is_manual_price: entry.is_manual_price ?? false,

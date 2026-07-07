@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "repair:totals": "tsx --env-file=.env.local scripts/repair-tiffin-totals.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
