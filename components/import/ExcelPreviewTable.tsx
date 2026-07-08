@@ -7,16 +7,10 @@ import type { ImportPreviewRow } from "@/types/import.type"
 
 interface ExcelPreviewTableProps {
     rows: ImportPreviewRow[]
+    originalRows?: ImportPreviewRow[]
 }
 
-function cellDisplay(row: ImportPreviewRow) {
-    if (row.morningQty > 0 && row.eveningQty > 0) return `${row.morningQty}+${row.eveningQty}`
-    if (row.morningQty > 0) return String(row.morningQty)
-    if (row.eveningQty > 0) return String(row.eveningQty)
-    return ""
-}
-
-export function ExcelPreviewTable({ rows, onUpdateRow }: ExcelPreviewTableProps & { onUpdateRow?: (id: string, morning: number, evening: number) => void }) {
+export function ExcelPreviewTable({ rows, originalRows = [], onUpdateRow }: ExcelPreviewTableProps & { onUpdateRow?: (id: string, morning: number, evening: number) => void }) {
     const visibleRows = useMemo(() => rows.slice(0, 1000), [rows])
 
     // Derive customer column order from first occurrence
@@ -76,6 +70,21 @@ export function ExcelPreviewTable({ rows, onUpdateRow }: ExcelPreviewTableProps 
         return totals
     }, [visibleRows, customerOrder])
 
+    const originalById = useMemo(() => {
+        const map = new Map<string, ImportPreviewRow>()
+        for (const row of originalRows) {
+            map.set(row.id, row)
+        }
+        return map
+    }, [originalRows])
+
+    const cellClass = (row: ImportPreviewRow, field: "morningQty" | "eveningQty") => {
+        const original = originalById.get(row.id)
+        if (!original) return ""
+        const changed = original[field] !== row[field]
+        return changed ? "bg-warning/10 ring-1 ring-warning/40" : ""
+    }
+
     return (
         <Card className="border-border/80 shadow-sm">
             <CardHeader>
@@ -106,7 +115,7 @@ export function ExcelPreviewTable({ rows, onUpdateRow }: ExcelPreviewTableProps 
                                             <TableCell key={c}>
                                                 <div className="flex items-center gap-2">
                                                     <input
-                                                        className="w-12 rounded border px-2 py-1 text-sm"
+                                                        className={"w-12 rounded border px-2 py-1 text-sm " + cellClass(row, "morningQty")}
                                                         type="number"
                                                         min={0}
                                                         value={row.morningQty}
@@ -114,7 +123,7 @@ export function ExcelPreviewTable({ rows, onUpdateRow }: ExcelPreviewTableProps 
                                                     />
                                                     <span className="text-sm text-muted-foreground">+</span>
                                                     <input
-                                                        className="w-12 rounded border px-2 py-1 text-sm"
+                                                        className={"w-12 rounded border px-2 py-1 text-sm " + cellClass(row, "eveningQty")}
                                                         type="number"
                                                         min={0}
                                                         value={row.eveningQty}

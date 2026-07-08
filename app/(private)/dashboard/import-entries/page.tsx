@@ -36,6 +36,7 @@ export default function ImportEntriesPage() {
     const [isParsing, setIsParsing] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [previewRows, setPreviewRows] = useState<ImportPreviewRow[]>([])
+    const [originalPreviewRows, setOriginalPreviewRows] = useState<ImportPreviewRow[]>([])
     const [summary, setSummary] = useState<ImportSummary | null>(null)
     const [issues, setIssues] = useState<string[]>([])
     const [isImporting, setIsImporting] = useState(false)
@@ -61,6 +62,7 @@ export default function ImportEntriesPage() {
             const workbook = await parseWorkbookFile(file, selectedMonth, selectedYear)
             const validation = validateImportRows(workbook, customers)
             setPreviewRows(validation.previewRows)
+            setOriginalPreviewRows(validation.previewRows)
             setIssues([...validation.issues.map((issue) => issue.message), ...workbook.issues.map((issue) => issue.message)])
             setSummary({
                 importedCustomers: validation.summary.importedCustomers,
@@ -114,6 +116,12 @@ export default function ImportEntriesPage() {
             mounted = false
         }
     }, [selectedMonth, selectedYear, lastFile, customers])
+
+    function handleUpdateRow(id: string, morningQty: number, eveningQty: number) {
+        setPreviewRows((prev) => prev.map((row) =>
+            row.id === id ? { ...row, morningQty, eveningQty } : row,
+        ))
+    }
 
     async function handleImport() {
         if (!previewRows.length) return
@@ -225,7 +233,11 @@ export default function ImportEntriesPage() {
                             </div>
 
                             {summary ? <ImportSummaryCard summary={summary} /> : null}
-                            <ExcelPreviewTable rows={previewRows} />
+                            <ExcelPreviewTable
+                                rows={previewRows}
+                                originalRows={originalPreviewRows}
+                                onUpdateRow={handleUpdateRow}
+                            />
                         </div>
                     ) : null}
 
