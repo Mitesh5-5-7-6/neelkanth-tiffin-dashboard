@@ -2,8 +2,11 @@ import { pdf } from '@react-pdf/renderer'
 import React from 'react'
 import InvoiceDocument from './pdf/InvoiceDocument'
 import QRCode from 'qrcode'
-
-type FetchOpts = { baseUrl?: string }
+import mongoose from 'mongoose'
+import { dbConnect } from '@/lib/mongodb'
+import Customer from '@/models/customer.model'
+import TiffinEntry from '@/models/tiffin-entry.model'
+import Payment from '@/models/payment.model'
 
 interface TiffinRecord {
     date: string
@@ -19,28 +22,40 @@ interface Payment {
     [key: string]: unknown
 }
 
-async function fetchJson(path: string, opts: FetchOpts = {}) {
-    const base = opts.baseUrl || process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'http://localhost:3000'
-    const res = await fetch(`${base}${path}`)
-    if (!res.ok) throw new Error(`Failed to fetch ${path}: ${res.status}`)
-    return res.json()
+function parseDate(iso: string): Date {
+    const [y, m, d] = iso.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d))
 }
 
 export async function generateInvoicePdf(customerId: string, fromDate: string, toDate: string) {
     if (!customerId) throw new Error('customerId is required')
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || 'http://localhost:3000'
+    await dbConnect()
 
     // Fetch customer
-    const customer = await fetchJson(`/api/customers/${customerId}`, { baseUrl })
+    const customer = await Customer.findById(customerId).lean()
     if (!customer) throw new Error('Customer not found')
 
     // Fetch tiffin entries for the date range - filter by customer_id and date range
-    // Using the new endpoint that supports customer_id and date range filtering
     let records: TiffinRecord[] = []
     try {
-        const tiffinRes = await fetchJson(`/api/tiffin-entries/by-customer?customer_id=${customerId}&from=${fromDate}&to=${toDate}`, { baseUrl })
-        records = tiffinRes.data || tiffinRes || []
+        const start = parseDate(fromDate)
+        const end = new Date(parseDate(toDate).getTime() + 86_400_000) // Include entire end date
+
+        const entries = await TiffinEntry.find({
+            customer_id: new mongoose.Types.ObjectId(customerId),
+            entry_date: { $gte: start, $lt: end },
+        })
+            .select('entry_date morning_qty morning_price evening_qty evening_price')
+            .lean()
+
+        records = entries.map((e: any) => ({
+            date: e.entry_date.toISOString().split('T')[0],
+            morningQty: e.morning_qty || 0,
+            morningRate: e.morning_price || 0,
+            eveningQty: e.evening_qty || 0,
+            eveningRate: e.evening_price || 0,
+        }))
     } catch (e) {
         console.warn('Tiffin fetch failed, using empty records:', e)
         records = []
@@ -49,8 +64,21 @@ export async function generateInvoicePdf(customerId: string, fromDate: string, t
     // Fetch payments for this customer
     let payments: Payment[] = []
     try {
-        const paymentsRes = await fetchJson(`/api/payments?customer_id=${customerId}&limit=100`, { baseUrl })
-        payments = paymentsRes.data || paymentsRes || []
+        const rawPayments = await Payment.find({
+            customer_id: new mongoose.Types.ObjectId(customerId),
+        })
+            .sort({ payment_date: -1 })
+            .limit(100)
+            .lean()
+
+        payments = rawPayments.map((p: any) => ({
+            amount: p.paid_amount || 0,
+            method: p.payment_method || '',
+            transactionId: p.reference_number || '',
+            date: p.payment_date ? new Date(p.payment_date).toISOString().slice(0, 10) : '',
+            status: p.payment_status || '',
+            upi: p.payment_method === 'upi' ? (p.reference_number || 'neelkanth@upi') : '',
+        }))
     } catch (e) {
         console.warn('Payments fetch failed, using empty payments:', e)
         payments = []
