@@ -58,11 +58,29 @@ export async function GET(request: NextRequest) {
       ]),
       TiffinEntry.aggregate([
         { $match: { entry_date: { $gte: start, $lt: end } } },
-        { $group: { _id: null, amount: { $sum: "$total_amount" } } },
+        {
+          $project: {
+            _id: 1,
+            morning_qty: 1,
+            morning_price: 1,
+            evening_qty: 1,
+            evening_price: 1,
+            extras: 1,
+          },
+        },
       ]),
       TiffinEntry.aggregate([
         { $match: { entry_date: { $gte: prevStart, $lt: prevEnd } } },
-        { $group: { _id: null, amount: { $sum: "$total_amount" } } },
+        {
+          $project: {
+            _id: 1,
+            morning_qty: 1,
+            morning_price: 1,
+            evening_qty: 1,
+            evening_price: 1,
+            extras: 1,
+          },
+        },
       ]),
       Expense.aggregate([
         {
@@ -103,8 +121,56 @@ export async function GET(request: NextRequest) {
 
     const cT = currTiffin[0] ?? { morning: 0, evening: 0, total: 0 };
     const pT = prevTiffin[0] ?? { morning: 0, evening: 0, total: 0 };
-    const cR = currRevenue[0]?.amount ?? 0;
-    const pR = prevRevenue[0]?.amount ?? 0;
+    const cR = (
+      currRevenue as Array<{
+        morning_qty?: number;
+        morning_price?: number;
+        evening_qty?: number;
+        evening_price?: number;
+        extras?: Array<{ qty?: number; price?: number }>;
+      }>
+    ).reduce((sum, entry) => {
+      const morning =
+        (entry.morning_qty ?? 0) > 0
+          ? (entry.morning_qty ?? 0) * (entry.morning_price ?? 0)
+          : 0;
+      const evening =
+        (entry.evening_qty ?? 0) > 0
+          ? (entry.evening_qty ?? 0) * (entry.evening_price ?? 0)
+          : 0;
+      const extras = (entry.extras ?? []).reduce(
+        (extraSum, item) =>
+          extraSum +
+          ((item.qty ?? 0) > 0 ? (item.price ?? 0) * (item.qty ?? 0) : 0),
+        0,
+      );
+      return sum + morning + evening + extras;
+    }, 0);
+    const pR = (
+      prevRevenue as Array<{
+        morning_qty?: number;
+        morning_price?: number;
+        evening_qty?: number;
+        evening_price?: number;
+        extras?: Array<{ qty?: number; price?: number }>;
+      }>
+    ).reduce((sum, entry) => {
+      const morning =
+        (entry.morning_qty ?? 0) > 0
+          ? (entry.morning_qty ?? 0) * (entry.morning_price ?? 0)
+          : 0;
+      const evening =
+        (entry.evening_qty ?? 0) > 0
+          ? (entry.evening_qty ?? 0) * (entry.evening_price ?? 0)
+          : 0;
+      const extras = (entry.extras ?? []).reduce(
+        (extraSum, item) =>
+          extraSum +
+          ((item.qty ?? 0) > 0 ? (item.price ?? 0) * (item.qty ?? 0) : 0),
+        0,
+      );
+      return sum + morning + evening + extras;
+    }, 0);
     const cE = currExpense[0]?.amount ?? 0;
     const pE = prevExpense[0]?.amount ?? 0;
     const pd = pendingResult[0] ?? { amount: 0, customerCount: 0 };
