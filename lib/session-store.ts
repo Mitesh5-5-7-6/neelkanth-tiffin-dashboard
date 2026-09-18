@@ -1,12 +1,14 @@
-// Tracks the single active session — a new login invalidates any previous one.
-// Stored on globalThis so HMR module re-evaluations don't clear it.
-const g = globalThis as typeof globalThis & { __ntSessionId?: string | null }
-if (!('__ntSessionId' in g)) g.__ntSessionId = null
+// Tracks active sessions. Stored on globalThis so HMR re-evaluations don't clear it.
+// Uses a Set so multiple concurrent sessions across clients are supported.
+const g = globalThis as typeof globalThis & {
+  __ntActiveSessionIds?: Set<string>;
+};
+if (!("__ntActiveSessionIds" in g)) g.__ntActiveSessionIds = new Set();
 
 export function registerSession(id: string): void {
-    g.__ntSessionId = id
+  g.__ntActiveSessionIds!.add(id);
 }
 
 export function isActiveSession(id: string): boolean {
-    return g.__ntSessionId === id
+  return g.__ntActiveSessionIds!.has(id);
 }

@@ -62,6 +62,9 @@ export default function CustomerTable({
     selectedId,
 }: CustomerTableProps) {
     const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null)
+    const [printTarget, setPrintTarget] = useState<Customer | null>(null)
+    const [startDate, setStartDate] = useState("")
+    const [endDate, setEndDate] = useState("")
     const [downloadingFor, setDownloadingFor] = useState<string | null>(null)
     const [sorting, setSorting] = useState<SortingState>([{ id: "full_name", desc: false }])
 
@@ -98,11 +101,13 @@ export default function CustomerTable({
         }
     }
 
-    async function handleDownloadPdf(customer: Customer) {
+    async function handleDownloadPdf(customer: Customer, from: string, to: string) {
         const customerId = customer._id
         const qs = new URLSearchParams({
             customerId,
             name: customer.full_name ?? "",
+            from,
+            to,
         })
 
         try {
@@ -114,7 +119,7 @@ export default function CustomerTable({
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `invoice-${customerId}.pdf`
+            a.download = `invoice-${customer.full_name?.toLowerCase().replace(/\s+/g, "-") || customerId}-${from}-to-${to}.pdf`
             document.body.appendChild(a)
             a.click()
             a.remove()
@@ -253,7 +258,14 @@ export default function CustomerTable({
                             <Pencil className="w-4 h-4" />
                         </button>
                         <button
-                            onClick={() => handleDownloadPdf(c)}
+                            onClick={() => {
+                                const now = new Date()
+                                const defaultFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+                                const defaultTo = now.toISOString().split('T')[0]
+                                setStartDate(defaultFrom)
+                                setEndDate(defaultTo)
+                                setPrintTarget(c)
+                            }}
                             className="p-1.5 rounded-lg hover:bg-primary/10 text-muted hover:text-primary transition-colors"
                             title="Download invoice PDF"
                             disabled={!!downloadingFor}
@@ -271,7 +283,7 @@ export default function CustomerTable({
                 )
             },
         }),
-    ], [params, onView, onEdit, setDeleteTarget, downloadingFor])
+    ], [params, onView, onEdit, setDeleteTarget, downloadingFor, setStartDate, setEndDate, setPrintTarget])
 
     const table = useReactTable({
         data: customers,
@@ -415,6 +427,59 @@ export default function CustomerTable({
                         </Button>
                         <Button variant="destructive" onClick={handleDeleteConfirm}>
                             Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Print Date Range Selection Dialog */}
+            <Dialog open={!!printTarget} onOpenChange={(open) => !open && setPrintTarget(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Print Invoice</DialogTitle>
+                        <DialogDescription>
+                            Select the date range for the invoice of{" "}
+                            <span className="font-medium text-foreground">{printTarget?.full_name}</span>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="space-y-1.5">
+                            <label htmlFor="startDate" className="text-xs font-medium text-foreground">
+                                Start Date
+                            </label>
+                            <Input
+                                id="startDate"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label htmlFor="endDate" className="text-xs font-medium text-foreground">
+                                End Date
+                            </label>
+                            <Input
+                                id="endDate"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setPrintTarget(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                if (printTarget && startDate && endDate) {
+                                    handleDownloadPdf(printTarget, startDate, endDate)
+                                    setPrintTarget(null)
+                                }
+                            }}
+                            disabled={!startDate || !endDate}
+                        >
+                            Download PDF
                         </Button>
                     </DialogFooter>
                 </DialogContent>

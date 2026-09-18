@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AlertCircle, ArrowLeft, Loader2, Menu, PlayCircle, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
@@ -17,7 +17,7 @@ import type { ImportPreviewRow, ImportProgressEvent, ImportRunReport, ImportSumm
 import type { BulkSavePayload } from "@/types/tiffin.type"
 import { useAllCustomers } from "@/hooks/useCustomers"
 
-async function saveBulkPayload(payload: BulkSavePayload) {
+async function saveBulkPayload(payload: BulkSavePayload[]) {
     const response = await fetch("/api/tiffin-entries/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,25 +36,33 @@ export default function ImportEntriesPage() {
     const [isParsing, setIsParsing] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [previewRows, setPreviewRows] = useState<ImportPreviewRow[]>([])
+    const [originalPreviewRows, setOriginalPreviewRows] = useState<ImportPreviewRow[]>([])
     const [summary, setSummary] = useState<ImportSummary | null>(null)
     const [issues, setIssues] = useState<string[]>([])
     const [isImporting, setIsImporting] = useState(false)
     const [progress, setProgress] = useState<ImportProgressEvent>({ completed: 0, total: 0, currentDate: "", status: "idle" })
     const [report, setReport] = useState<ImportRunReport | null>(null)
+    const now = new Date()
+    const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonthDate.getMonth() + 1)
+    const [selectedYear, setSelectedYear] = useState<number>(defaultMonthDate.getFullYear())
+    const [lastFile, setLastFile] = useState<File | null>(null)
     const combinedError = error ?? (isCustomersError ? "Unable to load customer data. Please refresh and try again." : null)
 
     async function handleFileSelected(file: File) {
         setError(null)
         setIsParsing(true)
         setFileName(file.name)
+        setLastFile(file)
         setPreviewRows([])
         setIssues([])
         setReport(null)
 
         try {
-            const workbook = await parseWorkbookFile(file)
+            const workbook = await parseWorkbookFile(file, selectedMonth, selectedYear)
             const validation = validateImportRows(workbook, customers)
             setPreviewRows(validation.previewRows)
+            setOriginalPreviewRows(validation.previewRows)
             setIssues([...validation.issues.map((issue) => issue.message), ...workbook.issues.map((issue) => issue.message)])
             setSummary({
                 importedCustomers: validation.summary.importedCustomers,
@@ -77,6 +85,44 @@ export default function ImportEntriesPage() {
         }
     }
 
+    useEffect(() => {
+        if (!lastFile) return
+        let mounted = true
+            ; (async () => {
+                setIsParsing(true)
+                try {
+                    const workbook = await parseWorkbookFile(lastFile, selectedMonth, selectedYear)
+                    if (!mounted) return
+                    const validation = validateImportRows(workbook, customers)
+                    setPreviewRows(validation.previewRows)
+                    setIssues([...validation.issues.map((issue) => issue.message), ...workbook.issues.map((issue) => issue.message)])
+                    setSummary({
+                        importedCustomers: validation.summary.importedCustomers,
+                        skipped: validation.summary.skipped,
+                        unmatched: validation.summary.unmatched,
+                        duplicateNames: validation.summary.duplicateNames,
+                        duplicateDates: validation.summary.duplicateDates,
+                        totalEntries: validation.summary.totalEntries,
+                        totalDates: validation.summary.totalDates,
+                    })
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : "Unable to parse the workbook."
+                    setError(message)
+                } finally {
+                    setIsParsing(false)
+                }
+            })()
+        return () => {
+            mounted = false
+        }
+    }, [selectedMonth, selectedYear, lastFile, customers])
+
+    function handleUpdateRow(id: string, morningQty: number, eveningQty: number) {
+        setPreviewRows((prev) => prev.map((row) =>
+            row.id === id ? { ...row, morningQty, eveningQty } : row,
+        ))
+    }
+
     async function handleImport() {
         if (!previewRows.length) return
         const payloads = buildBulkPayloads(previewRows)
@@ -86,26 +132,34 @@ export default function ImportEntriesPage() {
         }
 
         setIsImporting(true)
-        setProgress({ completed: 0, total: payloads.length, currentDate: "", status: "importing" })
+        setProgress({ completed: 0, total: 1, currentDate: "Entire month", status: "importing" })
 
         const results: ImportRunReport["results"] = []
         const failedDates: string[] = []
 
-        for (const [index, payload] of payloads.entries()) {
-            setProgress({ completed: index, total: payloads.length, currentDate: payload.entry_date, status: "importing" })
-            try {
-                await saveBulkPayload(payload)
+        try {
+            await saveBulkPayload(payloads)
+            for (const payload of payloads) {
                 results.push({ date: payload.entry_date, success: true, entryCount: payload.entries.length })
-            } catch (err) {
-                const message = err instanceof Error ? err.message : "Bulk import failed"
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Bulk import failed"
+            for (const payload of payloads) {
                 failedDates.push(payload.entry_date)
                 results.push({ date: payload.entry_date, success: false, error: message, entryCount: payload.entries.length })
             }
         }
 
-        setProgress({ completed: payloads.length, total: payloads.length, currentDate: "", status: "complete" })
+        setProgress({ completed: 1, total: 1, currentDate: "", status: "complete" })
         setIsImporting(false)
-        setReport({ successCount: results.filter((item) => item.success).length, failedCount: results.filter((item) => !item.success).length, failedDates, totalImported: results.filter((item) => item.success).reduce((sum, item) => sum + item.entryCount, 0), totalFailed: results.filter((item) => !item.success).reduce((sum, item) => sum + item.entryCount, 0), results })
+        setReport({
+            successCount: results.filter((item) => item.success).length,
+            failedCount: results.filter((item) => !item.success).length,
+            failedDates,
+            totalImported: results.filter((item) => item.success).reduce((sum, item) => sum + item.entryCount, 0),
+            totalFailed: results.filter((item) => !item.success).reduce((sum, item) => sum + item.entryCount, 0),
+            results,
+        })
         if (failedDates.length) {
             toast.error(`${failedDates.length} date${failedDates.length > 1 ? "s" : ""} failed to import.`)
         } else {
@@ -135,6 +189,27 @@ export default function ImportEntriesPage() {
 
             <main className="flex-1 overflow-auto p-6">
                 <div className="mx-auto flex max-w-7xl flex-col gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground">Month</label>
+                            <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="rounded border px-2 py-1">
+                                {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, idx) => (
+                                    <option key={m} value={idx + 1}>{m}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground">Year</label>
+                            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="rounded border px-2 py-1">
+                                {Array.from({ length: 6 }).map((_, i) => {
+                                    const y = now.getFullYear() - i
+                                    return <option key={y} value={y}>{y}</option>
+                                })}
+                            </select>
+                        </div>
+                    </div>
+
                     <ExcelUploadCard onFileSelected={handleFileSelected} isLoading={isParsing} error={combinedError} acceptedFileName={fileName} />
 
                     {isCustomersLoading ? (
@@ -158,7 +233,11 @@ export default function ImportEntriesPage() {
                             </div>
 
                             {summary ? <ImportSummaryCard summary={summary} /> : null}
-                            <ExcelPreviewTable rows={previewRows} />
+                            <ExcelPreviewTable
+                                rows={previewRows}
+                                originalRows={originalPreviewRows}
+                                onUpdateRow={handleUpdateRow}
+                            />
                         </div>
                     ) : null}
 

@@ -52,7 +52,7 @@ export function useBulkSaveTiffinEntries() {
         mutationFn: (payload: BulkSavePayload) =>
             apiFetch<BulkSaveResponse>("/api/tiffin-entries/bulk", {
                 method: "POST",
-                body: JSON.stringify(payload),
+                body: JSON.stringify([payload]),
             }),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["tiffin-entries"] })

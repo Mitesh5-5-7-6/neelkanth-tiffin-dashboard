@@ -6,7 +6,7 @@ export const tiffinDefaultsSchema = z.object({
         .number({ message: 'Morning quantity is required' })
         .int('Quantity must be a whole number')
         .min(1, 'Minimum quantity is 1')
-        .max(10, 'Quantity too high'),
+        .max(50, 'Quantity too high'),
     morning_price: z
         .number({ message: 'Morning price is required' })
         .min(1, 'Price must be at least ₹1')
@@ -16,7 +16,7 @@ export const tiffinDefaultsSchema = z.object({
         .number({ message: 'Evening quantity is required' })
         .int('Quantity must be a whole number')
         .min(1, 'Minimum quantity is 1')
-        .max(10, 'Quantity too high'),
+        .max(50, 'Quantity too high'),
     evening_price: z
         .number({ message: 'Evening price is required' })
         .min(1, 'Price must be at least ₹1')
