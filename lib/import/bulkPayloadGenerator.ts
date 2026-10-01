@@ -15,6 +15,7 @@ export function buildBulkPayloads(rows: ImportPreviewRow[]): BulkSavePayload[] {
             evening_qty: row.eveningQty,
             evening_price: row.eveningPrice,
             evening_paid: row.eveningPaid,
+            extras: row.extras ?? [],
         }
 
         const current = grouped.get(row.date) ?? []

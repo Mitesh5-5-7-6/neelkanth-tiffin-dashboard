@@ -10,9 +10,11 @@ import { ExcelUploadCard } from "@/components/import/ExcelUploadCard"
 import { ExcelPreviewTable } from "@/components/import/ExcelPreviewTable"
 import { ImportSummaryCard } from "@/components/import/ImportSummaryCard"
 import { ImportProgressDialog } from "@/components/import/ImportProgressDialog"
+import { Textarea } from "@/components/ui/textarea"
 import { parseWorkbookFile } from "@/lib/import/excelParser"
 import { validateImportRows } from "@/lib/import/validation"
 import { buildBulkPayloads } from "@/lib/import/bulkPayloadGenerator"
+import { normalizeCustomerName } from "@/lib/import/customerMatcher"
 import type { ImportPreviewRow, ImportProgressEvent, ImportRunReport, ImportSummary } from "@/types/import.type"
 import type { BulkSavePayload } from "@/types/tiffin.type"
 import { useAllCustomers } from "@/hooks/useCustomers"
@@ -42,11 +44,15 @@ export default function ImportEntriesPage() {
     const [isImporting, setIsImporting] = useState(false)
     const [progress, setProgress] = useState<ImportProgressEvent>({ completed: 0, total: 0, currentDate: "", status: "idle" })
     const [report, setReport] = useState<ImportRunReport | null>(null)
+    const [aiText, setAiText] = useState("")
+    const [aiStatus, setAiStatus] = useState<{ entries: number; warnings: string[]; source: string } | null>(null)
+    const [isAiParsing, setIsAiParsing] = useState(false)
     const now = new Date()
     const defaultMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonthDate.getMonth() + 1)
     const [selectedYear, setSelectedYear] = useState<number>(defaultMonthDate.getFullYear())
     const [lastFile, setLastFile] = useState<File | null>(null)
+    const aiEntryDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
     const combinedError = error ?? (isCustomersError ? "Unable to load customer data. Please refresh and try again." : null)
 
     async function handleFileSelected(file: File) {
@@ -121,6 +127,84 @@ export default function ImportEntriesPage() {
         setPreviewRows((prev) => prev.map((row) =>
             row.id === id ? { ...row, morningQty, eveningQty } : row,
         ))
+    }
+
+    async function handleAiParse() {
+        if (!aiText.trim()) {
+            toast.error("Paste raw entry text before using AI parsing.")
+            return
+        }
+
+        setIsAiParsing(true)
+        setAiStatus(null)
+        setReport(null)
+
+        try {
+            const response = await fetch("/api/import/ai-parse", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: aiText, entryDate: aiEntryDate, useLLM: true }),
+            })
+            const json = await response.json()
+            if (!response.ok) throw new Error(json?.message ?? "AI parsing failed")
+
+            const payloads = ((json?.data?.payload ?? []) as BulkSavePayload[]) || []
+            const items = payloads.flatMap((payload) =>
+                payload.entries.map((entry, index) => ({
+                    ...entry,
+                    entryDate: payload.entry_date,
+                    index,
+                })),
+            )
+
+            const nextRows: ImportPreviewRow[] = items.map((entry, index) => {
+                const match = customers.find((customer) => customer._id === entry.customer_id)
+                const customerName = match?.full_name ?? `Unknown customer ${index + 1}`
+                const morningPrice = match?.tiffin_defaults?.morning_price ?? 0
+                const eveningPrice = match?.tiffin_defaults?.evening_price ?? 0
+
+                return {
+                    id: `ai-${entry.entryDate}-${index}`,
+                    date: entry.entryDate,
+                    dateLabel: entry.entryDate,
+                    customerName,
+                    customerId: entry.customer_id,
+                    morningQty: entry.morning_qty ?? 0,
+                    eveningQty: entry.evening_qty ?? 0,
+                    morningPrice,
+                    eveningPrice,
+                    morningPaid: entry.morning_paid ?? false,
+                    eveningPaid: entry.evening_paid ?? false,
+                    extras: entry.extras ?? [],
+                    status: entry.customer_id ? "matched" : "unmatched",
+                    errors: entry.customer_id ? [] : ["Customer could not be matched from pasted text."],
+                }
+            })
+
+            setPreviewRows(nextRows)
+            setOriginalPreviewRows(nextRows)
+            setAiStatus({
+                entries: nextRows.length,
+                warnings: json?.data?.warnings ?? [],
+                source: json?.data?.source ?? "local",
+            })
+            setIssues(json?.data?.warnings ?? [])
+            setSummary({
+                importedCustomers: new Set(nextRows.filter((row) => row.status === "matched").map((row) => row.customerId)).size,
+                skipped: 0,
+                unmatched: nextRows.filter((row) => row.status === "unmatched").length,
+                duplicateNames: 0,
+                duplicateDates: 0,
+                totalEntries: nextRows.filter((row) => row.status === "matched").length,
+                totalDates: new Set(nextRows.map((row) => row.date)).size,
+            })
+            toast.success(`AI parsed ${nextRows.length} entries from pasted text.`)
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "AI parsing failed"
+            toast.error(message)
+        } finally {
+            setIsAiParsing(false)
+        }
     }
 
     async function handleImport() {
@@ -211,6 +295,35 @@ export default function ImportEntriesPage() {
                     </div>
 
                     <ExcelUploadCard onFileSelected={handleFileSelected} isLoading={isParsing} error={combinedError} acceptedFileName={fileName} />
+
+                    <div className="rounded-xl border border-border/80 bg-card p-4 shadow-sm">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                                <h2 className="text-lg font-semibold text-foreground">AI paste importer</h2>
+                                <p className="text-sm text-muted-foreground">Paste raw entries like “1+5 roti”, “Cash = …”, or “Raj lunch” and convert them into import rows.</p>
+                            </div>
+                            <Button onClick={handleAiParse} disabled={isAiParsing} className="gap-2">
+                                {isAiParsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+                                Parse text
+                            </Button>
+                        </div>
+                        <Textarea
+                            value={aiText}
+                            onChange={(event) => setAiText(event.target.value)}
+                            placeholder="Example:\nKuber F 606 - 1+5 roti\nCash = dream rise, cash i, cash galaxy, 1+2 roti\nRaj 1 lunch\nRina dinner 2"
+                            className="min-h-32"
+                        />
+                        {aiStatus ? (
+                            <div className="mt-3 rounded-lg border border-border/80 bg-muted/20 p-3 text-sm text-muted-foreground">
+                                Parsed {aiStatus.entries} entries from pasted text. Source: {aiStatus.source}.
+                            </div>
+                        ) : null}
+                        {aiStatus?.warnings?.length ? (
+                            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-warning">
+                                {aiStatus.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                            </ul>
+                        ) : null}
+                    </div>
 
                     {isCustomersLoading ? (
                         <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card p-4 text-sm text-muted-foreground">

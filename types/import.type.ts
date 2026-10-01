@@ -1,3 +1,5 @@
+import type { TiffinExtraItem } from "@/types/tiffin.type"
+
 export type ImportStatus = "matched" | "unmatched" | "duplicate" | "skipped" | "validation-error"
 
 export interface ImportValidationIssue {
@@ -58,6 +60,7 @@ export interface ImportPreviewRow {
     eveningPrice: number
     morningPaid: boolean
     eveningPaid: boolean
+    extras?: TiffinExtraItem[]
     status: ImportStatus
     errors: string[]
 }
